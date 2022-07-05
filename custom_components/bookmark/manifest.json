@@ -1,0 +1,13 @@
+{
+    "domain": "bookmark",
+    "name": "\u6536\u85CF\u5939",
+    "version": "1.0",
+    "config_flow": true,
+    "documentation": "https://gitee.com/shaonianzhentan/bookmark",
+    "dependencies": [],
+    "codeowners": [
+        "@shaonianzhentan"
+    ],
+    "quality_scale": "internal",
+    "iot_class": "cloud_polling"
+}
