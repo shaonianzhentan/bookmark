@@ -11,10 +11,15 @@ DOMAIN = manifest.domain
 CONFIG_FILE = f'{STORAGE_DIR}/bookmark.json'
 
 class HttpView(HomeAssistantView):
-    url = f'{DOMAIN}-api'
+    url = f'/{DOMAIN}-api'
+    name = DOMAIN
+    cors_allowed = True
 
     def get_config(self, hass):
-        return load_json(hass.config.path(CONFIG_FILE))
+        result = load_json(hass.config.path(CONFIG_FILE))
+        if isinstance(result, dict):
+            result = []
+        return result
 
     def save_config(self, hass, data):
         save_json(hass.config.path(CONFIG_FILE), data)
@@ -34,30 +39,14 @@ class HttpView(HomeAssistantView):
 
     async def delete(self, request):
         hass = request.app["hass"]
-        query = request.query
-        url = query.get('url')
+        response = await request.json()
+        url = response.get('url')
         config = self.get_config(hass)
         for index, item in enumerate(config):
             if item['url'] == url:
                 del config[index]
                 break
-        self.save_config(config)
-        return self.json(config)
-
-    async def put(self, request):
-        hass = request.app["hass"]
-        response = await request.json()
-        category = response.get('category')
-        url = response.get('url')
-        name = response.get('name')
-
-        config = self.get_config(hass)
-        config.append({
-            'category': category,
-            'url': url,
-            'name': name
-        })
-        self.save_config(config)
+        self.save_config(hass, config)
         return self.json(config)
 
     async def post(self, request):
@@ -69,10 +58,20 @@ class HttpView(HomeAssistantView):
         name = response.get('name')
 
         config = self.get_config(hass)
+        not_exists = True
         for item in config:
-            if item['url'] == id:
-                item['url'] = url
+            if item['url'] == url:
                 item['name'] = name
                 item['category'] = category
-        self.save_config(config)
+                not_exists = False
+                break
+        
+        if not_exists:
+            config.append({
+                'category': category,
+                'url': url,
+                'name': name
+            })
+
+        self.save_config(hass, config)
         return self.json(config)

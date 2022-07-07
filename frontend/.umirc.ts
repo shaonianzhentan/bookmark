@@ -1,21 +1,20 @@
 import { defineConfig } from '@umijs/max';
 
 export default defineConfig({
+  outputPath: '../custom_components/bookmark/www/',
+  publicPath: './',
   antd: {},
   access: {},
   model: {},
   initialState: {},
   request: {},
   layout: {
+    title: '@umijs/max',
   },
   routes: [
     {
-      path: '/',
-      redirect: '/home',
-    },
-    {
       name: '首页',
-      path: '/home',
+      path: '/',
       component: './Home',
     },
     {
@@ -24,9 +23,9 @@ export default defineConfig({
       component: './Access',
     },
     {
-        name: ' CRUD 示例',
-        path: '/table',
-        component: './Table',
+      name: ' CRUD 示例',
+      path: '/table',
+      component: './Table',
     },
   ],
   npmClient: 'pnpm',

@@ -1,11 +1,11 @@
 {
+    "title": "收藏夹",
     "config": {
         "step": {
             "user": {
-                "title": "收藏夹",
                 "description": "",
                 "data": {
-                    "require_admin": "管理员可见"
+                    "require_admin": "仅管理员可见"
                 }
             }
         },

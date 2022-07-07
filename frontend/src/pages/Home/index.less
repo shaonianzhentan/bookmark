@@ -1,2 +1,19 @@
-.container {
+html {
+  --primary-color: #03a9f4;
+}
+
+.PageHeader {
+  background: var(--primary-color);
+  padding: 8px 20px;
+
+  :global(.ant-page-header-heading-title) {
+    color: white;
+    font-weight: 400;
+  }
+}
+
+.CommentList {
+  margin: 0 80px;
+  padding: 40px;
+  background: white;
 }

@@ -8,10 +8,17 @@ export async function getInitialState(): Promise<{ name: string }> {
 
 export const layout = () => {
   return {
-    title: '我的书签',
-    logo: 'https://www.home-assistant.io/images/home-assistant-logo.svg',
+    logo: 'https://img.alicdn.com/tfs/TB1YHEpwUT1gK0jSZFhXXaAtVXa-28-27.svg',
     menu: {
       locale: false,
     },
+    // 不展示顶栏
+    headerRender: false,
+    // 不展示页脚
+    footerRender: false,
+    // 不展示菜单
+    menuRender: false,
+    // 不展示菜单顶栏
+    menuHeaderRender: false,
   };
 };
