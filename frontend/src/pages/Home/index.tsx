@@ -73,7 +73,7 @@ const HomePage: React.FC = () => {
       <PageHeader
         className={styles.PageHeader}
         avatar={{ src: 'https://www.home-assistant.io/images/home-assistant-logo.svg' }}
-        title="收藏夹"
+        title="书签"
         extra={[
           <CreateMark key="add" options={categories.map(ele => {
             return { value: ele }
@@ -89,7 +89,7 @@ const HomePage: React.FC = () => {
       </Tabs>
       <List
         className={styles.CommentList}
-        header={`${data.length} 条收藏`}
+        header={`${data.length} 条书签`}
         itemLayout="horizontal"
         dataSource={data}
         renderItem={item => (
