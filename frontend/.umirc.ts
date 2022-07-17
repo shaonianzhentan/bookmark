@@ -2,7 +2,11 @@ import { defineConfig } from '@umijs/max';
 
 export default defineConfig({
   outputPath: '../custom_components/bookmark/www/',
-  publicPath: './',
+  base: '',
+  publicPath: '/bookmark-www/',
+  history: {
+    type: 'hash',
+  },
   antd: {},
   access: {},
   model: {},

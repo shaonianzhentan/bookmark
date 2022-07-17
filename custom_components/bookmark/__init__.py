@@ -6,7 +6,7 @@ from .http import HttpView
 from .manifest import manifest
 DOMAIN = manifest.domain
 VERSION = manifest.version
-WWW =  f'{manifest.domain}-www'
+WWW =  f'/{manifest.domain}-www'
 
 CONFIG_SCHEMA = cv.deprecated(DOMAIN)
 
@@ -15,7 +15,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.http.register_static_path(WWW, hass.config.path(f"custom_components/{DOMAIN}/www"), False)
     hass.components.frontend.async_register_built_in_panel(
                         "iframe",
-                        "收藏夹",
+                        "书签",
                         "mdi:bookmark",
                         DOMAIN,
                         { "url": f"{WWW}/index.html?ver={VERSION}" },

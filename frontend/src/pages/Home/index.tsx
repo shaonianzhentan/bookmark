@@ -47,6 +47,9 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     ha.httpGet('/bookmark-api').then((list: any) => {
       setSource(list)
+      document.querySelector('.ant-page-header-heading-left')?.addEventListener('click', (ev) => {
+        ha.hassToggleMenu()
+      }, false)
     })
   }, [])
 
