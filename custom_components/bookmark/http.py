@@ -53,7 +53,6 @@ class HttpView(HomeAssistantView):
         hass = request.app["hass"]
         response = await request.json()
         category = response.get('category')
-        id = response.get('id')
         url = response.get('url')
         name = response.get('name')
 

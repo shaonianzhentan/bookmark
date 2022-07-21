@@ -2,7 +2,7 @@ import Guide from '@/components/Guide';
 import { trim } from '@/utils/format';
 import { useState, useEffect } from 'react'
 import { PageContainer, ProCard } from '@ant-design/pro-components';
-import { PageHeader, Comment, List, Tooltip, Tabs, message } from 'antd';
+import { PageHeader, Affix, Comment, List, Tooltip, Tabs, message } from 'antd';
 import { DeleteOutlined, GlobalOutlined, MessageOutlined } from '@ant-design/icons';
 import { useModel } from '@umijs/max';
 import styles from './index.less';
@@ -25,6 +25,8 @@ let source = new Array<IBookmark>()
 
 
 const HomePage: React.FC = () => {
+
+  const [activeKey, setActiveKey] = useState('')
   const [data, setData] = useState<Array<IBookmark>>([])
   const [categories, setCategories] = useState<Array<string>>([])
 
@@ -41,7 +43,7 @@ const HomePage: React.FC = () => {
       }
     })
     setCategories(Array.from(new Set(list.map((ele: any) => ele.category))))
-    tabsChange('')
+    tabsChange(activeKey)
   }
 
   useEffect(() => {
@@ -54,6 +56,7 @@ const HomePage: React.FC = () => {
   }, [])
 
   const tabsChange = (key: string) => {
+    setActiveKey(key)
     setData(ha.jsonClone(key ? source.filter(ele => ele.category === key) : source))
   }
 
@@ -70,17 +73,19 @@ const HomePage: React.FC = () => {
 
   return (
     <>
-      <PageHeader
-        className={styles.PageHeader}
-        avatar={{ src: 'https://www.home-assistant.io/images/home-assistant-logo.svg' }}
-        title="书签"
-        extra={[
-          <CreateMark key="add" options={categories.map(ele => {
-            return { value: ele }
-          })} onOk={onOk} />
-        ]}
-      />
-      <Tabs className={styles.tabs} defaultActiveKey="" centered onChange={tabsChange}>
+      <Affix offsetTop={0}>
+        <PageHeader
+          className={styles.PageHeader}
+          avatar={{ src: 'https://www.home-assistant.io/images/home-assistant-logo.svg' }}
+          title="书签"
+          extra={[
+            <CreateMark key="add" options={categories.map(ele => {
+              return { value: ele }
+            })} onOk={onOk} />
+          ]}
+        />
+      </Affix>
+      <Tabs className={styles.tabs} activeKey={activeKey} centered onChange={tabsChange}>
         <TabPane tab="全部" key="">
         </TabPane>
         {
