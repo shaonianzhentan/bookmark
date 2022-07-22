@@ -7,19 +7,13 @@ import { DeleteOutlined, GlobalOutlined, MessageOutlined } from '@ant-design/ico
 import { useModel } from '@umijs/max';
 import styles from './index.less';
 import ha from '../../utils/ha'
+import { IBookmark } from './interface/type'
 
 import CreateMark from './components/CreateMark'
+import SearchPanel from './components/SearchPanel'
+import ListBookMark from './components/ListBookMark';
 
 const { TabPane } = Tabs;
-
-interface IBookmark {
-  host: string;
-  hostname: string;
-  origin: string,
-  url: string;
-  name: string;
-  category: string;
-}
 
 let source = new Array<IBookmark>()
 
@@ -81,7 +75,11 @@ const HomePage: React.FC = () => {
           extra={[
             <CreateMark key="add" options={categories.map(ele => {
               return { value: ele }
-            })} onOk={onOk} />
+            })} onOk={onOk} />,
+            <SearchPanel
+              key="search"
+              source={source}
+            />,
           ]}
         />
       </Affix>
@@ -92,26 +90,7 @@ const HomePage: React.FC = () => {
           categories.map(item => <TabPane tab={item} key={item}></TabPane>)
         }
       </Tabs>
-      <List
-        className={styles.CommentList}
-        header={`${data.length} 条书签`}
-        itemLayout="horizontal"
-        dataSource={data}
-        renderItem={item => (
-          <li key={item.url}>
-            <Comment
-              actions={[
-                <Tooltip title="删除">
-                  <DeleteOutlined onClick={() => deleteClick(item.url)} />
-                </Tooltip>
-                , <a target="_blank" href={item.origin}>{item.host}</a>]}
-              author={<a target="_blank" href={item.url}>{item.url}</a>}
-              avatar={`https://0x3.com/icon?host=${item.hostname}`}
-              content={(<p>{item.name}</p>)}
-            />
-          </li>
-        )}
-      />
+      <ListBookMark className={styles.CommentList} source={data} />
     </>
   );
 };
