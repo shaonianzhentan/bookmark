@@ -18,7 +18,7 @@ const SearchPanel: React.FC<PropsWithChildren<SearchPanelProps>> = (props) => {
     // console.log(e.target.value)
     const value = e.target.value
     setData(source.filter(ele => {
-      return ele.name.includes(value) || ele.url.includes(value)
+      return ele.name.toLocaleLowerCase().includes(value) || ele.url.toLocaleLowerCase().includes(value)
     }))
   }
   return (
