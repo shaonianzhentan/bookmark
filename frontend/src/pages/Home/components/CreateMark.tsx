@@ -20,7 +20,7 @@ const CreateForm: React.FC<PropsWithChildren<CreateFormProps>> = (props) => {
         form.current?.submit()
     }
     const onFinish = (data: any) => {
-        ha.httpPost('/bookmark-api', data).then((res: any) => {
+        ha.httpPost('/api/bookmark', data).then((res: any) => {
             onOk(res)
             setVisible(false)
             message.info('保存成功');

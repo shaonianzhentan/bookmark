@@ -1,7 +1,7 @@
 {
     "domain": "bookmark",
     "name": "\u4E66\u7B7E",
-    "version": "2022.7.21",
+    "version": "2022.8.1",
     "config_flow": true,
     "documentation": "https://gitee.com/shaonianzhentan/bookmark",
     "dependencies": [],

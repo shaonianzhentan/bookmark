@@ -25,15 +25,20 @@ const HomePage: React.FC = () => {
   const [categories, setCategories] = useState<Array<string>>([])
 
   const setSource = (list: any) => {
+    // 倒叙
+    list.reverse()
+
     source = list.map((ele: IBookmark) => {
       const url = new URL(ele.url)
+      let time = ele.time ? new Date(ele.time).toLocaleString() : ''
       return {
         host: url.host,
         hostname: url.hostname,
         name: ele.name,
         url: ele.url,
         origin: url.origin,
-        category: ele.category
+        category: ele.category,
+        time
       }
     })
     setCategories(Array.from(new Set(list.map((ele: any) => ele.category))))
@@ -41,7 +46,7 @@ const HomePage: React.FC = () => {
   }
 
   useEffect(() => {
-    ha.httpGet('/bookmark-api').then((list: any) => {
+    ha.httpGet('/api/bookmark').then((list: any) => {
       setSource(list)
       document.querySelector('.ant-page-header-heading-left')?.addEventListener('click', (ev) => {
         ha.hassToggleMenu()
@@ -59,7 +64,7 @@ const HomePage: React.FC = () => {
   }
 
   const deleteClick = (url: string) => {
-    ha.httpDelete('/bookmark-api', { url }).then((list: any) => {
+    ha.httpDelete('/api/bookmark', { url }).then((list: any) => {
       setSource(list)
       message.info('删除成功')
     })

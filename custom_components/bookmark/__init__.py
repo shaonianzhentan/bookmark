@@ -3,10 +3,8 @@ from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 
 from .http import HttpView
-from .manifest import manifest
-DOMAIN = manifest.domain
-VERSION = manifest.version
-WWW =  f'/{manifest.domain}-www'
+
+from .const import DOMAIN, WWW, VERSION
 
 CONFIG_SCHEMA = cv.deprecated(DOMAIN)
 

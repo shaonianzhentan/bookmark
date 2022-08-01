@@ -2,7 +2,7 @@ import Guide from '@/components/Guide';
 import { trim } from '@/utils/format';
 import React, { PropsWithChildren, useState, createRef } from 'react';
 import { PageContainer, ProCard } from '@ant-design/pro-components';
-import { PageHeader, Affix, Comment, List, Tooltip, Tabs, message } from 'antd';
+import { PageHeader, Affix, Comment, List, Divider, Tabs, message } from 'antd';
 import { IBookmark } from '../interface/type'
 import styles from '../index.less';
 
@@ -25,10 +25,14 @@ const ListBookMark: React.FC<PropsWithChildren<SearchPanelProps>> = (props) => {
         renderItem={item => (
           <li key={item.url}>
             <Comment
-              actions={[<a target="_blank" href={item.origin}>{item.host}</a>]}
+              actions={[item.time]}
               author={<a target="_blank" href={item.url}>{item.url}</a>}
               avatar={`https://0x3.com/icon?host=${item.hostname}`}
-              content={(<p>{item.name}</p>)}
+              content={[
+                <a target="_blank" href={item.origin}>{item.host}</a>,
+                <Divider type="vertical" />,
+                <span>{item.name}</span>
+              ]}
             />
           </li>
         )}

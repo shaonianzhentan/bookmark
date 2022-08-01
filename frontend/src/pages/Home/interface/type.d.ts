@@ -5,4 +5,5 @@ export interface IBookmark {
   url: string;
   name: string;
   category: string;
+  time: string;
 }

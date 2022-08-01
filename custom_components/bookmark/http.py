@@ -5,14 +5,15 @@ from homeassistant.helpers.network import get_url
 from homeassistant.helpers.storage import STORAGE_DIR
 
 from homeassistant.util.json import load_json, save_json
-from .manifest import manifest
-DOMAIN = manifest.domain
+
+from .const import DOMAIN, API_URL, API_NAME
 
 CONFIG_FILE = f'{STORAGE_DIR}/bookmark.json'
 
 class HttpView(HomeAssistantView):
-    url = f'/{DOMAIN}-api'
-    name = DOMAIN
+    
+    url = API_URL
+    name = API_NAME
     cors_allowed = True
 
     def get_config(self, hass):
@@ -62,6 +63,7 @@ class HttpView(HomeAssistantView):
             if item['url'] == url:
                 item['name'] = name
                 item['category'] = category
+                item['time'] = int(time.time() * 1000)
                 not_exists = False
                 break
         
@@ -69,7 +71,8 @@ class HttpView(HomeAssistantView):
             config.append({
                 'category': category,
                 'url': url,
-                'name': name
+                'name': name,
+                'time': int(time.time() * 1000)
             })
 
         self.save_config(hass, config)
