@@ -31,7 +31,7 @@ const CreateForm: React.FC<PropsWithChildren<CreateFormProps>> = (props) => {
             <Modal
                 destroyOnClose
                 title="新增书签"
-                width={420}
+                width={'100%'}
                 visible={visible}
                 onOk={okClick}
                 onCancel={() => setVisible(false)}
@@ -72,7 +72,7 @@ const CreateForm: React.FC<PropsWithChildren<CreateFormProps>> = (props) => {
                     </Form.Item>
                 </Form>
             </Modal>
-            <Button type="primary" shape="circle" icon={<PlusOutlined />} onClick={() => setVisible(true)} />
+            <Button shape="circle" icon={<PlusOutlined />} onClick={() => setVisible(true)} />
         </>
     );
 };

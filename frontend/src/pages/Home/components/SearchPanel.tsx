@@ -26,7 +26,8 @@ const SearchPanel: React.FC<PropsWithChildren<SearchPanelProps>> = (props) => {
       <Modal
         destroyOnClose
         title="搜索"
-        width={420}
+        width={'100%'}
+        style={{ top: 5 }}
         visible={visible}
         onCancel={() => setVisible(false)}
         footer={null}
@@ -34,7 +35,7 @@ const SearchPanel: React.FC<PropsWithChildren<SearchPanelProps>> = (props) => {
         <Input placeholder="请输入关键词搜索" onInput={onTextChange} />
         <ListBookMark source={data} />
       </Modal>
-      <Button type="primary" shape="circle" icon={<SearchOutlined />} onClick={() => setVisible(true)} />
+      <Button shape="circle" icon={<SearchOutlined />} onClick={() => setVisible(true)} />
     </>
   );
 };

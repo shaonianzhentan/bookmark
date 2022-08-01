@@ -25,7 +25,6 @@ const ListBookMark: React.FC<PropsWithChildren<SearchPanelProps>> = (props) => {
         renderItem={item => (
           <li key={item.url}>
             <Comment
-              actions={[item.time]}
               author={<a target="_blank" href={item.url}>{item.url}</a>}
               avatar={`https://0x3.com/icon?host=${item.hostname}`}
               content={[
