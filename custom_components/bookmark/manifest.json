@@ -1,9 +1,9 @@
 {
     "domain": "bookmark",
     "name": "\u4E66\u7B7E",
-    "version": "2022.8.1",
+    "version": "2023.4.7",
     "config_flow": true,
-    "documentation": "https://gitee.com/shaonianzhentan/bookmark",
+    "documentation": "https://github.com/shaonianzhentan/bookmark",
     "dependencies": [],
     "codeowners": [
         "@shaonianzhentan"

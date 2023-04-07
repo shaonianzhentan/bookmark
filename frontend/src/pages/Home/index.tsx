@@ -25,8 +25,13 @@ const HomePage: React.FC = () => {
   const [categories, setCategories] = useState<Array<string>>([])
 
   const setSource = (list: any) => {
-    // 倒叙
-    list.reverse()
+    // 倒序
+    list.sort((a: any, b: any) => {
+      const t1 = a.time || 0
+      const t2 = b.time || 0
+      const v = t1 > t2 ? -1 : (t1 < t2 ? 1 : 0)
+      return v
+    })
 
     source = list.map((ele: IBookmark) => {
       const url = new URL(ele.url)
@@ -64,6 +69,9 @@ const HomePage: React.FC = () => {
   }
 
   const deleteClick = (url: string) => {
+
+    if (!top?.confirm("确定删除？")) return;
+
     ha.httpDelete('/api/bookmark', { url }).then((list: any) => {
       setSource(list)
       message.info('删除成功')
@@ -95,7 +103,7 @@ const HomePage: React.FC = () => {
           categories.map(item => <TabPane tab={item} key={item}></TabPane>)
         }
       </Tabs>
-      <ListBookMark className={styles.CommentList} source={data} />
+      <ListBookMark className={styles.CommentList} source={data} deleteClick={deleteClick} />
     </>
   );
 };

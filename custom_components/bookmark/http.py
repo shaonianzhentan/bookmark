@@ -77,3 +77,23 @@ class HttpView(HomeAssistantView):
 
         self.save_config(hass, config)
         return self.json(config)
+
+    async def put(self, request):
+        hass = request.app["hass"]
+        response = await request.json()
+        url = response.get('url')
+        key = response.get('key')
+        value = response.get('value')
+
+        config = self.get_config(hass)
+        not_exists = True
+        for item in config:
+            if item['url'] == url:
+                item[key] = value
+                not_exists = False
+                break
+
+        if not_exists == False:
+            self.save_config(hass, config)
+
+        return self.json(config)
