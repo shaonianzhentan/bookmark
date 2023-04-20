@@ -85,7 +85,7 @@ class HomeAssistant {
         });
         event.detail = data;
         if (!ele) {
-            ele = querySelector(win.document, 'app-drawer-layout')
+            ele = querySelector(win.document, 'home-assistant-main')
         }
         ele.dispatchEvent(event);
     }
