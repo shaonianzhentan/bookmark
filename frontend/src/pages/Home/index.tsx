@@ -83,7 +83,7 @@ const HomePage: React.FC = () => {
       <Affix offsetTop={0}>
         <PageHeader
           className={styles.PageHeader}
-          avatar={{ src: 'https://www.home-assistant.io/images/home-assistant-logo.svg' }}
+          avatar={{ src: 'https://www.home-assistant.io/images/favicon-192x192.png' }}
           title="书签"
           extra={[
             <CreateMark key="add" options={categories.map(ele => {
