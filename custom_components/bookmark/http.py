@@ -4,7 +4,8 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.helpers.network import get_url
 from homeassistant.helpers.storage import STORAGE_DIR
 
-from homeassistant.util.json import load_json, save_json
+from homeassistant.util.json import load_json
+from homeassistant.helpers.json import save_json
 
 from .const import DOMAIN, API_URL, API_NAME
 
