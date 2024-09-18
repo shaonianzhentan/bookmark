@@ -13,7 +13,7 @@ class Page:
     @staticmethod
     async def async_register_www(url_path, config_path, cache=False):
         hass = async_get_hass()
-        await hass.http.async_register_static_paths(hass,
+        await hass.http.async_register_static_paths(
             [ StaticPathConfig(url_path, hass.config.path(config_path), cache) ]
         )
 
