@@ -20,6 +20,23 @@ const ListBookMark: React.FC<PropsWithChildren<SearchPanelProps>> = (props) => {
     ha.httpPut('/api/bookmark', { url, key: 'time', value: Date.now() })
   }
 
+  const copyClick = (url: string) => {
+
+    let id = 'unique-id-clipboard-copyText'
+    let copyText = document.getElementById(id) as HTMLInputElement
+    if (!copyText) {
+      copyText = document.createElement('input')
+      copyText.id = id
+      copyText.style.cssText = 'position:absolute;left:-9999px'
+      document.body.appendChild(copyText)
+    }
+    copyText.value = url
+    copyText.select()
+    copyText.setSelectionRange(0, copyText.value.length)
+    document.execCommand('copy')
+
+    message.success('复制成功')
+  }
   return (
     <>
       <List
@@ -39,9 +56,9 @@ const ListBookMark: React.FC<PropsWithChildren<SearchPanelProps>> = (props) => {
               avatar={
                 <Avatar src={`https://0x3.com/icon?host=${item.hostname}`} />
               }
-              title={<a target="_blank" href={item.url} onClick={() => linkClick(item.url)}>{item.url}</a>}
+              title={<a target="_blank" href={item.url} onClick={() => linkClick(item.url)} onDoubleClick={() => copyClick(item.url)}>{item.url}</a>}
               description={[
-                <a target="_blank" href={item.origin} onClick={() => linkClick(item.url)}>{item.host}</a>,
+                <a target="_blank" href={item.origin} onClick={() => linkClick(item.url)} onDoubleClick={() => copyClick(item.url)}>{item.host}</a>,
                 <Divider type="vertical" />,
                 <span>{item.name}</span>
               ]}
