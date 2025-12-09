@@ -20,8 +20,15 @@ class Page:
     @staticmethod
     async def async_register_iframe(title, icon, url_path, url, require_admin=False):
         hass = async_get_hass()
-        async_register_built_in_panel(hass, "iframe", title, icon, url_path,
-                            { "url": url }, require_admin=require_admin)
+        async_register_built_in_panel(
+            hass,
+            "iframe",
+            sidebar_title=title,
+            sidebar_icon=icon,
+            frontend_url_path=url_path,
+            config={"url": url},
+            require_admin=require_admin,
+        )
 
     @staticmethod
     async def async_remove_iframe(url_path):
