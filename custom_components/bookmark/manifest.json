@@ -1,13 +1,13 @@
 {
-    "domain": "bookmark",
-    "name": "\u4E66\u7B7E",
-    "version": "2024.10.21",
-    "config_flow": true,
-    "documentation": "https://github.com/shaonianzhentan/bookmark",
-    "dependencies": [],
-    "codeowners": [
-        "@shaonianzhentan"
-    ],
-    "quality_scale": "internal",
-    "iot_class": "cloud_polling"
+  "domain": "bookmark",
+  "name": "网页收藏",
+  "version": "2026.11.10",
+  "config_flow": true,
+  "documentation": "https://github.com/shaonianzhentan/bookmark",
+  "dependencies": [],
+  "codeowners": [
+    "@shaonianzhentan"
+  ],
+  "quality_scale": "internal",
+  "iot_class": "local_polling"
 }

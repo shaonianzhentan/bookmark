@@ -102,3 +102,6 @@ dist
 
 # TernJS port file
 .tern-port
+
+# 本地临时验证目录（测试脚本、截图、无头浏览器配置；不提交）
+.validate/

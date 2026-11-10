@@ -1,17 +1,16 @@
 {
-    "title": "收藏夹",
-    "config": {
-        "step": {
-            "user": {
-                "description": "",
-                "data": {
-                    "require_admin": "仅管理员可见"
-                }
-            }
-        },
-        "error": {},
-        "abort": {
-            "single_instance_allowed": "仅允许单个配置."
+  "title": "Bookmarks",
+  "config": {
+    "step": {
+      "user": {
+        "description": "A Favorites panel will be added to the sidebar.",
+        "data": {
+          "require_admin": "Only visible to administrators"
         }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only a single instance is allowed."
     }
+  }
 }

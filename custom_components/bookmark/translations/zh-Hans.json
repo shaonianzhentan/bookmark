@@ -1,0 +1,16 @@
+{
+  "title": "网页收藏",
+  "config": {
+    "step": {
+      "user": {
+        "description": "添加后会在侧边栏显示「网页收藏」面板。",
+        "data": {
+          "require_admin": "仅管理员可见"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "只能添加一个网页收藏集成。"
+    }
+  }
+}

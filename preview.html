@@ -1,0 +1,1585 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>网页收藏 · 界面预览与操作流程</title>
+<!--
+  静态预览页：不连接 Home Assistant，数据全部在浏览器内存中。
+  面板样式与 DOM 模板内联自：
+    custom_components/bookmark/www/bookmark-styles.js  (STYLES，:host 改为 .bm-host)
+    custom_components/bookmark/www/bookmark-panel.js  (ICONS / TEMPLATE)
+  真实界面改动后，请重新内联这两处内容以保持预览一致。
+-->
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: #eef1f6;
+  color: #1b1b1f;
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  padding-bottom: 36px;
+}
+
+/* ------------------------------------------------------------ 预览页外壳 */
+.pv-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap; padding: 16px 28px;
+  background: #fff; border-bottom: 1px solid #dfe3ea;
+}
+.pv-title { display: flex; align-items: center; gap: 14px; }
+.pv-title img { width: 42px; height: 42px; flex: none; }
+.pv-title h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: .2px; }
+.pv-title p { margin: 2px 0 0; color: #616169; font-size: 12.5px; }
+.pv-badge {
+  display: inline-block; margin-left: 8px; padding: 1px 9px;
+  border-radius: 10px; background: #e8f1fb; color: #0f4c8a;
+  font-size: 11px; font-weight: 600; vertical-align: 2px;
+}
+.pv-header-actions { display: flex; align-items: center; gap: 12px; }
+.pv-soft-btn {
+  padding: 6px 14px; border: 1px solid #d8dde6; border-radius: 6px;
+  background: #fff; color: #33333a; font-size: 12.5px; cursor: pointer;
+}
+.pv-soft-btn:hover { background: #f3f5f9; border-color: #0f6cbd; color: #0f6cbd; }
+.pv-switch { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #51515a; cursor: pointer; }
+
+.pv-wrap { max-width: 1400px; margin: 0 auto; padding: 18px 28px 0; }
+.pv-steps { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 2px 12px; }
+.pv-step {
+  flex: none; display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 13px; border: 1px solid #d8dde6; border-radius: 20px;
+  background: #fff; color: #3b3b42; font-size: 12.5px; white-space: nowrap; cursor: pointer;
+}
+.pv-step:hover { border-color: #0f6cbd; color: #0f6cbd; }
+.pv-step.active { background: #0f6cbd; border-color: #0f6cbd; color: #fff; font-weight: 600; }
+.pv-step i { font-style: normal; font-size: 11px; opacity: .72; }
+
+.pv-note {
+  display: flex; gap: 16px; margin-bottom: 14px; padding: 15px 20px;
+  background: #fff; border: 1px solid #dfe3ea; border-radius: 10px;
+}
+.pv-note-num {
+  flex: none; width: 34px; height: 34px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  background: #e8f1fb; color: #0f4c8a; font-size: 13px; font-weight: 700;
+}
+.pv-note-body { min-width: 0; }
+.pv-note h2 { margin: 0 0 3px; font-size: 15px; font-weight: 650; }
+.pv-note p { margin: 0; color: #51515a; font-size: 12.8px; }
+.pv-note ul { margin: 7px 0 0; padding-left: 18px; color: #51515a; font-size: 12.3px; }
+.pv-note li { margin: 1px 0; }
+.pv-note code, .pv-footer code, .pv-status code {
+  padding: 1px 5px; border-radius: 4px; background: #f1f3f7;
+  font-family: Consolas, "Cascadia Mono", monospace; font-size: 11.5px;
+}
+
+.pv-browser {
+  border: 1px solid #d3d9e3; border-radius: 12px; overflow: hidden;
+  background: #fff; box-shadow: 0 10px 30px rgba(20, 30, 50, .08);
+}
+/* 桌面手动勾选「手机视图」时，把模拟窗口收成手机宽度 */
+.pv-browser.pv-phone { width: 390px; max-width: 100%; margin-left: auto; margin-right: auto; }
+.pv-browser.pv-phone .pv-stage { height: 620px; }
+
+/* ------------------------------------------------------------ 模拟 HA 顶栏与侧边栏 */
+.pv-browser { position: relative; --pv-ha-drawer-top: 38px; }
+.pv-browser.has-ha-header { --pv-ha-drawer-top: 94px; }
+.pv-ha-header {
+  display: flex; align-items: center; gap: 12px; height: 56px; flex: none;
+  padding: 0 14px; background: #fff; border-bottom: 1px solid #e3e6ec; color: #1b1b1f;
+}
+.pv-ha-header[hidden] { display: none; }
+.pv-ha-menu {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex: none;
+  border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer;
+}
+.pv-ha-menu:hover { background: rgba(125, 125, 135, .12); }
+.pv-ha-menu svg { width: 20px; height: 20px; }
+.pv-ha-title { font-size: 16px; font-weight: 600; }
+.pv-ha-actions { margin-left: auto; color: #616169; font-size: 18px; letter-spacing: 2px; }
+.pv-ha-layer { position: absolute; top: var(--pv-ha-drawer-top); right: 0; bottom: 0; left: 0; z-index: 60; display: none; }
+.pv-ha-layer.show { display: block; }
+.pv-ha-mask { position: absolute; inset: 0; background: rgba(0, 0, 0, .42); }
+.pv-ha-drawer {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 250px; max-width: 82%;
+  padding: 14px 0; overflow: auto; background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .22);
+}
+.pv-ha-drawer-head {
+  padding: 8px 18px 14px; margin-bottom: 6px; border-bottom: 1px solid #e3e6ec;
+  color: #616169; font-size: 11.5px; font-weight: 600; letter-spacing: .6px;
+}
+.pv-ha-item {
+  display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 18px;
+  font-size: 13px; color: #1b1b1f; cursor: pointer;
+}
+.pv-ha-item:hover { background: rgba(125, 125, 135, .10); }
+.pv-ha-item.active { background: #e8f1fb; color: #0f4c8a; font-weight: 600; }
+.pv-ha-item i { width: 16px; text-align: center; font-style: normal; color: #0f6cbd; }
+body.pv-dark .pv-ha-header { background: #292a2d; border-bottom-color: #3c3d41; color: #f2f2f4; }
+body.pv-dark .pv-ha-drawer { background: #252629; }
+body.pv-dark .pv-ha-drawer-head { border-bottom-color: #3c3d41; color: #a6a6ad; }
+body.pv-dark .pv-ha-item { color: #f2f2f4; }
+body.pv-dark .pv-ha-item.active { background: rgba(79, 156, 249, .20); color: #9ccbff; }
+.pv-browser-bar {
+  display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 14px;
+  background: #f7f8fa; border-bottom: 1px solid #e3e6ec;
+  position: relative; z-index: 61; /* HA 抽屉展开时不遮挡浏览器地址栏 */
+}
+.pv-dots { display: flex; gap: 6px; flex: none; }
+.pv-dots span { width: 10px; height: 10px; border-radius: 50%; background: #e0e3e9; }
+.pv-dots span:first-child { background: #f2b8b5; }
+.pv-dots span:nth-child(2) { background: #f3d59a; }
+.pv-dots span:nth-child(3) { background: #b9dcb2; }
+.pv-addr {
+  flex: 1; max-width: 470px; margin: 0 auto; padding: 3px 12px;
+  border: 1px solid #e3e6ec; border-radius: 12px; background: #fff;
+  color: #6a6a72; font-size: 11.5px; text-align: center; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.pv-stage { position: relative; height: 640px; }
+.pv-status {
+  display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 7px 16px;
+  border-top: 1px solid #e3e6ec; background: #fafbfc;
+  color: #616169; font-size: 11.5px;
+}
+.pv-status-label { flex: none; font-weight: 600; color: #0f4c8a; }
+.pv-status code { background: #fff; border: 1px solid #e3e6ec; }
+
+.pv-footer { max-width: 1400px; margin: 16px auto 0; padding: 0 28px; color: #616169; font-size: 12px; }
+.pv-footer h3 { margin: 0 0 4px; color: #3b3b42; font-size: 13px; }
+.pv-footer p { margin: 2px 0; }
+
+/* 强制浅 / 深色（真实面板默认跟随系统，这里提供可控切换） */
+.bm-host.pv-light {
+  --bm-text: #1b1b1f; --bm-sub: #616169; --bm-bg: #f3f3f6;
+  --bm-surface: #ffffff; --bm-sidebar: #fbfbfc; --bm-line: #e3e3e8;
+  --bm-selected: #e8f1fb; --bm-selected-text: #0f4c8a;
+  --bm-accent: #0f6cbd; --bm-accent-hover: #115ea3;
+}
+.bm-host.pv-dark {
+  --bm-text: #f2f2f4; --bm-sub: #a6a6ad; --bm-bg: #202124;
+  --bm-surface: #292a2d; --bm-sidebar: #252629; --bm-line: #3c3d41;
+  --bm-selected: rgba(79, 156, 249, .20); --bm-selected-text: #9ccbff;
+  --bm-accent: #4f9cf9; --bm-accent-hover: #68aafb;
+}
+.pv-flash { outline: 3px solid #ffb900 !important; outline-offset: 2px; animation: pv-pulse .8s ease-in-out infinite alternate; }
+@keyframes pv-pulse { from { outline-color: #ffb900; } to { outline-color: #0f6cbd; } }
+
+/* ------------------------------------------------------------ 窄屏适配（预览页外壳） */
+@media (max-width: 870px) {
+  .pv-header { padding: 12px 14px; gap: 10px; }
+  .pv-title { gap: 10px; }
+  .pv-title img { width: 34px; height: 34px; }
+  .pv-title h1 { font-size: 16px; }
+  .pv-title p { font-size: 11.5px; }
+  .pv-badge { margin-left: 6px; font-size: 10px; }
+  .pv-header-actions { width: 100%; justify-content: flex-start; gap: 14px; flex-wrap: wrap; }
+  .pv-switch { font-size: 12px; }
+  .pv-wrap { padding: 12px 12px 0; }
+  .pv-steps { gap: 6px; padding-bottom: 10px; }
+  .pv-step { padding: 6px 10px; font-size: 11.5px; }
+  .pv-note { gap: 10px; padding: 12px 14px; margin-bottom: 10px; }
+  .pv-note-num { width: 28px; height: 28px; font-size: 11px; }
+  .pv-note h2 { font-size: 14px; }
+  .pv-note p { font-size: 12px; }
+  .pv-note ul { font-size: 11.5px; padding-left: 15px; }
+  .pv-browser-bar { height: 32px; padding: 0 10px; gap: 8px; }
+  .pv-browser { --pv-ha-drawer-top: 32px; }
+  .pv-browser.has-ha-header { --pv-ha-drawer-top: 88px; }
+  .pv-addr { font-size: 10px; padding: 2px 8px; }
+  .pv-stage { height: min(72vh, 620px); min-height: 420px; }
+  .pv-status { padding: 6px 10px; font-size: 10.5px; gap: 6px; }
+  .pv-status code { word-break: break-all; }
+  .pv-footer { padding: 0 12px; font-size: 11.5px; }
+}
+@media (max-width: 480px) {
+  .pv-title p { display: none; }
+  .pv-step i { display: none; }
+  .pv-stage { height: 68vh; min-height: 380px; }
+}
+
+/* ------------------------------------------------------------ 真实面板样式 */
+/*__PANEL_STYLES_START__*/
+.bm-host {
+  --bm-text: var(--primary-text-color, #1b1b1f);
+  --bm-sub: var(--secondary-text-color, #616169);
+  --bm-bg: var(--primary-background-color, #f3f3f6);
+  --bm-surface: var(--card-background-color, #ffffff);
+  --bm-sidebar: var(--card-background-color, #fbfbfc);
+  --bm-line: var(--divider-color, #e3e3e8);
+  --bm-hover: rgba(125, 125, 135, .11);
+  --bm-selected: #e8f1fb;
+  --bm-selected-text: #0f4c8a;
+  --bm-accent: #0f6cbd;
+  --bm-accent-hover: #115ea3;
+  --bm-danger: #c42b1c;
+  --bm-shadow: 0 8px 24px rgba(0, 0, 0, .16), 0 1px 3px rgba(0, 0, 0, .10);
+  --bm-font: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+
+  display: block;
+  height: 100%;
+  min-height: 360px;
+  color: var(--bm-text);
+  font-family: var(--bm-font);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  .bm-host {
+    --bm-text: var(--primary-text-color, #f2f2f4);
+    --bm-sub: var(--secondary-text-color, #a6a6ad);
+    --bm-bg: var(--primary-background-color, #202124);
+    --bm-surface: var(--card-background-color, #292a2d);
+    --bm-sidebar: var(--card-background-color, #252629);
+    --bm-line: var(--divider-color, #3c3d41);
+    --bm-selected: rgba(79, 156, 249, .20);
+    --bm-selected-text: #9ccbff;
+    --bm-accent: #4f9cf9;
+    --bm-accent-hover: #68aafb;
+  }
+}
+
+* { box-sizing: border-box; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+svg { display: block; width: 16px; height: 16px; flex: none; }
+
+.bm-app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 360px;
+  background: var(--bm-bg);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------ 顶部工具栏 */
+.bm-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 60px;
+  padding: 10px 20px;
+  background: var(--bm-surface);
+  border-bottom: 1px solid var(--bm-line);
+  flex: none;
+}
+/* 面板顶栏只是工具栏：标题与 HA 侧边栏入口由 HA 自带的 app bar 提供 */
+.bm-brand { display: flex; align-items: center; flex: none; }
+.bm-brand .bm-folder-toggle { color: var(--bm-accent); }
+.bm-app:not(.sidebar-collapsed) .bm-brand .bm-folder-toggle { background: var(--bm-hover); }
+
+.bm-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 460px;
+  height: 34px;
+  padding: 0 10px;
+  gap: 8px;
+  border: 1px solid var(--bm-line);
+  border-radius: 6px;
+  background: var(--bm-bg);
+  transition: border-color .12s, box-shadow .12s;
+}
+.bm-search:focus-within { border-color: var(--bm-accent); box-shadow: 0 0 0 1px var(--bm-accent); }
+.bm-search > svg { color: var(--bm-sub); width: 15px; height: 15px; }
+.bm-search-input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+  font-size: 13px;
+}
+.bm-search-input::-webkit-search-cancel-button { display: none; }
+.bm-search-clear {
+  border: 0; background: transparent; color: var(--bm-sub);
+  font-size: 18px; line-height: 1; padding: 0 2px;
+}
+.bm-search-clear[hidden] { display: none; }
+
+.bm-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.bm-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 32px; padding: 0 12px;
+  border: 1px solid var(--bm-line); border-radius: 6px;
+  background: var(--bm-surface); color: var(--bm-text);
+  font-size: 12.5px; white-space: nowrap;
+  transition: background .12s, border-color .12s;
+}
+.bm-btn:hover { background: var(--bm-hover); }
+.bm-btn-primary {
+  background: var(--bm-accent); border-color: var(--bm-accent); color: #fff;
+}
+.bm-btn-primary:hover { background: var(--bm-accent-hover); border-color: var(--bm-accent-hover); }
+.bm-btn-danger { background: var(--bm-danger); border-color: var(--bm-danger); color: #fff; }
+.bm-btn-danger:hover { filter: brightness(.92); background: var(--bm-danger); }
+.bm-btn svg { width: 14px; height: 14px; }
+.bm-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex: none;
+  border: 0; border-radius: 6px; background: transparent; color: var(--bm-text);
+}
+.bm-icon-btn:hover { background: var(--bm-hover); }
+.bm-icon-btn svg { width: 17px; height: 17px; }
+
+/* ------------------------------------------------------------ 主体布局 */
+.bm-body { display: flex; flex: 1; min-height: 0; }
+.bm-sidebar {
+  display: flex; flex-direction: column;
+  width: 272px; flex: none;
+  background: var(--bm-sidebar);
+  border-right: 1px solid var(--bm-line);
+  transition: width .16s;
+  overflow: hidden;
+}
+.bm-app.sidebar-collapsed .bm-sidebar { width: 0; border-right: 0; }
+.bm-sidebar-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 8px; flex: none;
+  color: var(--bm-sub); font-size: 12px; font-weight: 600; letter-spacing: .4px;
+}
+.bm-link { border: 0; background: transparent; color: var(--bm-accent); font-size: 12px; padding: 2px 4px; }
+.bm-link:hover { text-decoration: underline; }
+.bm-tree { flex: 1; overflow: auto; padding: 2px 8px 16px; }
+.bm-sidebar-foot {
+  flex: none; padding: 12px 16px; border-top: 1px solid var(--bm-line);
+  color: var(--bm-sub); font-size: 11.5px; line-height: 1.5;
+}
+
+.bm-tree-row {
+  display: flex; align-items: center; gap: 6px;
+  height: 32px; margin: 1px 0; padding-right: 8px;
+  border-radius: 6px; cursor: pointer; user-select: none;
+  white-space: nowrap;
+}
+.bm-tree-row:hover { background: var(--bm-hover); }
+.bm-tree-row.selected { background: var(--bm-selected); color: var(--bm-selected-text); font-weight: 600; }
+.bm-tree-row.drop-target { outline: 2px solid var(--bm-accent); outline-offset: -2px; }
+.bm-chevron {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; flex: none;
+  border: 0; background: transparent; color: var(--bm-sub); border-radius: 4px;
+  transition: transform .12s;
+}
+.bm-chevron svg { width: 12px; height: 12px; }
+.bm-chevron.open { transform: rotate(90deg); }
+.bm-chevron.empty { visibility: hidden; }
+.bm-tree-ico { color: var(--bm-accent); flex: none; }
+.bm-tree-ico svg { width: 15px; height: 15px; }
+.bm-tree-label { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.bm-tree-count { color: var(--bm-sub); font-size: 11px; font-weight: 400; }
+
+.bm-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.bm-crumbs {
+  display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+  min-height: 42px; padding: 8px 24px 0; flex: none;
+  color: var(--bm-sub); font-size: 12px;
+}
+.bm-crumb { border: 0; background: transparent; color: var(--bm-sub); padding: 2px 4px; border-radius: 4px; }
+.bm-crumb:hover { color: var(--bm-accent); text-decoration: underline; }
+.bm-crumb.current { color: var(--bm-text); font-weight: 600; }
+.bm-crumb-static { padding: 2px 4px; }
+.bm-crumb-sep { color: var(--bm-sub); opacity: .65; }
+.bm-list-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 24px 12px; flex: none; gap: 12px;
+}
+.bm-list-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.bm-list-title h2 { margin: 0; font-size: 20px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-list-title span { color: var(--bm-sub); font-size: 12px; white-space: nowrap; }
+.bm-list-tools { display: flex; gap: 2px; }
+
+.bm-list {
+  flex: 1; min-height: 0; overflow: auto;
+  margin: 0 24px 20px;
+  padding: 6px;
+  background: var(--bm-surface);
+  border: 1px solid var(--bm-line);
+  border-radius: 8px;
+}
+.bm-row {
+  display: flex; align-items: center; gap: 12px;
+  height: 48px; padding: 0 10px;
+  border-radius: 6px; cursor: pointer; user-select: none;
+}
+.bm-row:hover { background: var(--bm-hover); }
+.bm-row.dragging { opacity: .45; }
+.bm-row.drop-target { outline: 2px solid var(--bm-accent); outline-offset: -2px; }
+.bm-fav {
+  width: 22px; height: 22px; flex: none; object-fit: contain;
+  border-radius: 4px;
+}
+.bm-fav-folder { display: inline-flex; align-items: center; justify-content: center; color: var(--bm-accent); }
+.bm-fav-folder svg { width: 20px; height: 20px; }
+.bm-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bm-row-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-row-url {
+  color: var(--bm-sub); font-size: 11.5px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bm-row-more {
+  width: 28px; height: 28px; flex: none;
+  border: 0; border-radius: 5px; background: transparent; color: var(--bm-text);
+  display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .1s;
+}
+.bm-row:hover .bm-row-more, .bm-row-more:focus { opacity: 1; }
+.bm-row-more:hover { background: var(--bm-hover); }
+
+.bm-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; min-height: 260px; color: var(--bm-sub); text-align: center;
+}
+.bm-empty svg { width: 44px; height: 44px; opacity: .45; }
+.bm-empty p { margin: 0; }
+.bm-error { color: var(--bm-danger); }
+
+/* ------------------------------------------------------------ 弹出菜单 */
+.bm-menu-layer, .bm-dialog-layer { position: absolute; inset: 0; pointer-events: none; display: none; }
+.bm-menu-layer.show, .bm-dialog-layer.show { display: block; }
+.bm-menu-layer { z-index: 20; }
+.bm-dialog-layer { z-index: 30; }
+.bm-menu-layer.show, .bm-dialog-layer.show { pointer-events: none; }
+.bm-menu {
+  position: absolute; min-width: 210px; padding: 5px; white-space: nowrap;
+  background: var(--bm-surface); color: var(--bm-text);
+  border: 1px solid var(--bm-line); border-radius: 8px;
+  box-shadow: var(--bm-shadow);
+  pointer-events: auto;
+}
+.bm-menu-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 32px; padding: 0 10px;
+  border: 0; border-radius: 5px; background: transparent; text-align: left;
+  font-size: 12.5px;
+}
+.bm-menu-item:hover { background: var(--bm-hover); }
+.bm-menu-item.danger { color: var(--bm-danger); }
+.bm-menu-item svg { width: 15px; height: 15px; color: var(--bm-sub); }
+.bm-menu-item.danger svg { color: var(--bm-danger); }
+.bm-menu-item > span:not(.bm-menu-spacer) { flex: 1; }
+.bm-menu-item small { color: var(--bm-accent); font-size: 12px; min-width: 14px; text-align: center; }
+.bm-menu-spacer { width: 15px; height: 15px; flex: none; }
+.bm-menu-sep { height: 1px; margin: 5px 6px; background: var(--bm-line); }
+.bm-menu-check { color: var(--bm-accent); font-size: 13px; }
+
+/* ------------------------------------------------------------ 对话框 */
+.bm-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .32); pointer-events: auto;
+}
+.bm-dialog {
+  width: min(420px, calc(100% - 32px));
+  padding: 22px 24px 18px;
+  background: var(--bm-surface); color: var(--bm-text);
+  border: 1px solid var(--bm-line); border-radius: 10px;
+  box-shadow: var(--bm-shadow);
+}
+.bm-dialog h3 { margin: 0 0 6px; font-size: 17px; font-weight: 600; }
+.bm-dialog-text { margin: 0 0 12px; color: var(--bm-sub); font-size: 12.5px; line-height: 1.6; }
+.bm-dialog-body { display: flex; flex-direction: column; gap: 12px; margin: 14px 0 20px; }
+.bm-field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; }
+.bm-field > span { color: var(--bm-sub); }
+.bm-field input, .bm-field select {
+  height: 34px; padding: 0 10px;
+  border: 1px solid var(--bm-line); border-radius: 6px;
+  background: var(--bm-bg); color: var(--bm-text); outline: 0;
+}
+.bm-field select option { background: var(--bm-surface); color: var(--bm-text); }
+.bm-field input:focus, .bm-field select:focus { border-color: var(--bm-accent); box-shadow: 0 0 0 1px var(--bm-accent); }
+.bm-field input[type="file"] { height: auto; min-height: 34px; padding: 6px 8px; font-size: 12px; }
+.bm-field input[type="file"]::file-selector-button {
+  margin-right: 10px; padding: 4px 10px;
+  border: 1px solid var(--bm-line); border-radius: 5px;
+  background: var(--bm-surface); color: var(--bm-text); cursor: pointer;
+}
+.bm-field-hint { margin: 0; color: var(--bm-sub); font-size: 11.5px; line-height: 1.6; }
+.bm-dialog-foot { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ------------------------------------------------------------ 提示条 */
+.bm-toast {
+  position: absolute; left: 50%; bottom: 24px; transform: translate(-50%, 12px);
+  min-width: 180px; max-width: 80%; padding: 10px 16px;
+  background: #323130; color: #fff; border-radius: 6px;
+  box-shadow: var(--bm-shadow); font-size: 12.5px; text-align: center;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+  z-index: 40;
+}
+.bm-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.bm-toast.error { background: var(--bm-danger); }
+
+/* ------------------------------------------------------------ 响应式 */
+.bm-host.narrow .bm-sidebar { position: absolute; top: 60px; bottom: 0; left: 0; z-index: 10; width: min(272px, 84vw); box-shadow: var(--bm-shadow); }
+.bm-host.narrow .bm-app.sidebar-collapsed .bm-sidebar { width: 0; border-right: 0; box-shadow: none; }
+.bm-host.narrow .bm-topbar { padding: 10px 12px; gap: 10px; }
+.bm-host.narrow .bm-btn span.bm-btn-label { display: none; }
+.bm-host.narrow .bm-btn { padding: 0 8px; }
+.bm-host.narrow .bm-list { margin: 0 12px 12px; }
+.bm-host.narrow .bm-list-head, .bm-host.narrow .bm-crumbs { padding-left: 12px; padding-right: 12px; }
+.bm-host.narrow .bm-menu { max-width: calc(100vw - 24px); }
+/*__PANEL_STYLES_END__*/
+</style>
+</head>
+<body>
+
+<header class="pv-header">
+  <div class="pv-title">
+    <img src="custom_components/bookmark/brand/icon.png" alt="网页收藏集成图标">
+    <div>
+      <h1>网页收藏 · 界面预览<span class="pv-badge">静态演示</span></h1>
+      <p>数据仅存在于浏览器内存，不会读写 Home Assistant；点击上方步骤可自动演示对应流程。</p>
+    </div>
+  </div>
+  <div class="pv-header-actions">
+    <label class="pv-switch"><input type="checkbox" id="pvHaToggle"> 模拟 HA 顶栏</label>
+    <label class="pv-switch"><input type="checkbox" id="pvNarrow"> 手机视图</label>
+    <label class="pv-switch"><input type="checkbox" id="pvDark"> 深色外观</label>
+    <button class="pv-soft-btn" id="pvReset">重置演示数据</button>
+  </div>
+</header>
+
+<div class="pv-wrap">
+  <nav class="pv-steps" id="pvSteps" aria-label="操作流程"></nav>
+  <section class="pv-note" id="pvNote"></section>
+
+  <div class="pv-browser">
+    <div class="pv-browser-bar">
+      <div class="pv-dots"><span></span><span></span><span></span></div>
+      <div class="pv-addr">http://homeassistant.local:8123/bookmark</div>
+    </div>
+    <div class="pv-ha-header" id="pvHaHeader" hidden>
+      <button class="pv-ha-menu" id="pvHaMenu" title="打开 HA 侧边栏" aria-label="打开 HA 侧边栏">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+      </button>
+      <span class="pv-ha-title">网页收藏</span>
+      <span class="pv-ha-actions">···</span>
+    </div>
+    <div class="pv-stage"><div class="bm-host pv-light" id="pvHost"></div></div>
+    <div class="pv-status">
+      <span class="pv-status-label">接口调用</span>
+      <code id="pvStatus">等待操作 · GET /api/bookmark 已由演示数据代替</code>
+    </div>
+    <div class="pv-ha-layer" id="pvHaLayer">
+      <div class="pv-ha-mask" id="pvHaMask"></div>
+      <nav class="pv-ha-drawer" aria-label="模拟 HA 侧边栏">
+        <div class="pv-ha-drawer-head">HOME ASSISTANT</div>
+        <div class="pv-ha-item" data-ha-item="概览"><i>▦</i>概览</div>
+        <div class="pv-ha-item" data-ha-item="历史"><i>◷</i>历史</div>
+        <div class="pv-ha-item" data-ha-item="能源"><i>⚡</i>能源</div>
+        <div class="pv-ha-item" data-ha-item="设置"><i>⚙</i>设置</div>
+        <div class="pv-ha-item" data-ha-item="开发者工具"><i>⌘</i>开发者工具</div>
+        <div class="pv-ha-item active" data-ha-item="网页收藏"><i>▤</i>网页收藏</div>
+      </nav>
+    </div>
+  </div>
+</div>
+
+<footer class="pv-footer">
+  <h3>说明</h3>
+  <p>本页内联了 <code>www/bookmark-styles.js</code> 的样式与 <code>www/bookmark-panel.js</code> 的 DOM 模板，所见即 HA 中自定义面板的真实外观。</p>
+  <p>真实运行时：数据来自 <code>GET /api/bookmark</code>，改动整份树提交 <code>POST /api/bookmark</code>；导入走 <code>POST /api/bookmark/import</code>，导出走 <code>GET /api/bookmark/export</code>。格式转换全部由 Python 的 <code>convert.py</code> 完成，落盘文件是 <code>.storage/bookmark.html</code>（标准 Netscape Bookmark HTML）。</p>
+  <p>窄屏（≤ 870px）会自动模拟 HA 注入的 <code>narrow</code> 属性：侧栏默认收起、点顶栏「文件夹」按钮展开，选中文件夹后自动收起；桌面可勾选「手机视图」强制预览移动端效果。</p>
+  <p>勾选「模拟 HA 顶栏」可查看 HA 自带 app bar 与面板工具栏的共存效果；点 app bar 上的汉堡会弹出模拟的 HA 侧边栏抽屉，对应真实环境里由 <code>hass-toggle-menu</code> 事件驱动的抽屉。</p>
+  <p>预览里的「导入/导出/打开链接/复制」只做可视反馈，不产生真实文件、不跳转、不写剪贴板。</p>
+</footer>
+
+<script>
+/*__PANEL_PRELUDE_START__*/
+const svg = (body) => `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">${body}</svg>`;
+
+const ICONS = {
+  brand: svg('<path d="M4 1.4h8a1.1 1.1 0 0 1 1.1 1.1v12L8 11.6 2.9 14.5v-12A1.1 1.1 0 0 1 4 1.4Z"/>'),
+  menu: svg('<path d="M2 3.4h12v1.3H2zm0 3.9h12v1.3H2zm0 3.9h12v1.3H2z"/>'),
+  search: svg('<path d="M6.8 1.8a5 5 0 1 0 3.06 8.95l3.2 3.2.92-.92-3.2-3.2A5 5 0 0 0 6.8 1.8Zm0 1.3a3.7 3.7 0 1 1 0 7.4 3.7 3.7 0 0 1 0-7.4Z"/>'),
+  plus: svg('<path d="M7.1 2.2h1.8v4.9h4.9v1.8H8.9v4.9H7.1V8.9H2.2V7.1h4.9z"/>'),
+  folderPlus: svg('<path d="M1.5 3.6A1.6 1.6 0 0 1 3.1 2h3l1.4 1.5h6.4A1.6 1.6 0 0 1 15.5 5v7.4a1.6 1.6 0 0 1-1.6 1.6H3.1a1.6 1.6 0 0 1-1.6-1.6V3.6Zm1.3 0v8.8c0 .17.13.3.3.3h10.8a.3.3 0 0 0 .3-.3V5a.3.3 0 0 0-.3-.3H7L5.6 3.2H3.1a.3.3 0 0 0-.3.4Z"/><path d="M7.35 6.3h1.3V8.5h2.2v1.3H8.65v2.2h-1.3V9.8h-2.2V8.5h2.2z"/>'),
+  folder: svg('<path d="M1.5 3.6A1.6 1.6 0 0 1 3.1 2h3l1.4 1.5h6.4A1.6 1.6 0 0 1 15.5 5v7.4a1.6 1.6 0 0 1-1.6 1.6H3.1a1.6 1.6 0 0 1-1.6-1.6V3.6Zm1.3 0v8.8c0 .17.13.3.3.3h10.8a.3.3 0 0 0 .3-.3V5a.3.3 0 0 0-.3-.3H7L5.6 3.2H3.1a.3.3 0 0 0-.3.4Z"/>'),
+  chevron: svg('<path d="M5.7 2.8 10.6 8l-4.9 5.2-.95-.9L8.7 8 4.75 3.7z"/>'),
+  more: svg('<circle cx="3" cy="8" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="13" cy="8" r="1.25"/>'),
+  sort: svg('<path d="M2 3.4h12v1.3H2zm0 3.9h9v1.3H2zm0 3.9h6v1.3H2z"/>'),
+  open: svg('<path d="M8.5 2H14v5.5h-1.3V4.35L8.1 9l-.92-.92 4.65-4.65H8.5zM12.5 9.5v3a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1h3V2h-3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3z"/>'),
+  copy: svg('<path d="M5.5 1.5h7a1 1 0 0 1 1 1v9h-1.3V2.8H5.5zM3.5 4h7a1 1 0 0 1 1 1v9.5H3.5zM4.8 5.3v8h5.4v-8z"/>'),
+  edit: svg('<path d="M12.7 1.6a1 1 0 0 1 1.4 0l.3.3a1 1 0 0 1 0 1.4l-1.3 1.3-2-2 1.6-1Zm-1.5 4.1-2-2-7 7-.4 2.7 2.7-.4 6.7-7.3Z"/>'),
+  trash: svg('<path d="M6 2h4l.4 1H13v1.2H3V3h2.6L6 2ZM4.2 5.3h7.6l-.6 8.2a1 1 0 0 1-1 .9H5.8a1 1 0 0 1-1-.9l-.6-8.2Zm2 1.2.4 6.4h.9l-.4-6.4H6.2Zm2.8 0-.4 6.4h.9l.4-6.4H9z"/>'),
+  move: svg('<path d="M1.5 3.6A1.6 1.6 0 0 1 3.1 2h3l1.4 1.5h6.4a1.6 1.6 0 0 1 1.6 1.6v2.2h-1.3V5a.3.3 0 0 0-.3-.3H7L5.6 3.2H3.1a.3.3 0 0 0-.3.3v7.9c0 .17.13.3.3.3H6v1.3H3.1a1.6 1.6 0 0 1-1.6-1.6V3.6Z"/><path d="M8.8 7h5.4l-1.5-1.5.9-.9 3 3-3 3-.9-.9 1.5-1.5H8.8z"/>'),
+  upload: svg('<path d="m8 1.5 4.2 4.2-1.1 1.1L8.8 4.5v6.8H7.2V4.5L4.9 6.8 3.8 5.7 8 1.5ZM2.5 12h11v2.5h-11z"/>'),
+  download: svg('<path d="M7.2 1.5h1.6v6.8l2.3-2.3 1.1 1.1L8 11.3 3.8 7.1l1.1-1.1 2.3 2.3V1.5ZM2.5 12h11v2.5h-11z"/>'),
+};
+
+const DEFAULT_FAVICON = 'data:image/svg+xml,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">'
+  + '<circle cx="8" cy="8" r="6.4" fill="none" stroke="#8a8886" stroke-width="1.2"/>'
+  + '<path d="M1.6 8h12.8M8 1.6c2.1 2.1 2.1 10.7 0 12.8M8 1.6c-2.1 2.1-2.1 10.7 0 12.8" fill="none" stroke="#8a8886" stroke-width="1"/>'
+  + '</svg>'
+);
+
+const TEMPLATE = `
+<div class="bm-app">
+  <header class="bm-topbar">
+    <div class="bm-brand">
+      <button class="bm-btn bm-folder-toggle" data-act="toggle-sidebar" title="显示/隐藏文件夹列表">${ICONS.folder}<span class="bm-btn-label">文件夹</span></button>
+    </div>
+    <div class="bm-search">
+      ${ICONS.search}
+      <input class="bm-search-input" type="search" placeholder="搜索收藏夹" autocomplete="off" spellcheck="false" />
+      <button class="bm-search-clear" data-act="clear-search" title="清除搜索" hidden>&times;</button>
+    </div>
+    <div class="bm-actions">
+      <button class="bm-btn" data-act="add-url" title="添加收藏夹">${ICONS.plus}<span class="bm-btn-label">添加收藏夹</span></button>
+      <button class="bm-btn" data-act="add-folder" title="添加文件夹">${ICONS.folderPlus}<span class="bm-btn-label">添加文件夹</span></button>
+      <button class="bm-icon-btn" data-act="more" title="更多选项">${ICONS.more}</button>
+    </div>
+  </header>
+
+  <div class="bm-body">
+    <aside class="bm-sidebar">
+      <div class="bm-sidebar-head"><span>文件夹</span><button class="bm-link" data-act="collapse-all">全部折叠</button></div>
+      <div class="bm-tree" id="tree"></div>
+      <div class="bm-sidebar-foot">拖动条目到文件夹即可移动；右键查看更多操作。</div>
+    </aside>
+
+    <main class="bm-main">
+      <div class="bm-crumbs" id="crumbs"></div>
+      <div class="bm-list-head">
+        <div class="bm-list-title"><h2 id="folderTitle"></h2><span id="folderCount"></span></div>
+        <div class="bm-list-tools">
+          <button class="bm-icon-btn" data-act="sort" title="排序方式">${ICONS.sort}</button>
+          <button class="bm-icon-btn" data-act="more" title="更多选项">${ICONS.more}</button>
+        </div>
+      </div>
+      <div class="bm-list" id="list"></div>
+    </main>
+  </div>
+
+  <div class="bm-menu-layer" id="menuLayer"></div>
+  <div class="bm-dialog-layer" id="dialogLayer"></div>
+  <div class="bm-toast" id="toast"></div>
+</div>
+`;
+/*__PANEL_PRELUDE_END__*/
+
+/* ==================================================================
+   以下为预览专用逻辑：内存演示数据 + 界面交互 + 流程导览
+   ================================================================== */
+const ROOT_KEYS = ['bookmark_bar', 'other', 'synced'];
+const host = document.getElementById('pvHost');
+host.innerHTML = TEMPLATE;
+
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+function xmlText(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+function favicon(node) {
+  const text = node.url || node.name || '';
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  const letter = xmlText((node.name || '?').trim().charAt(0).toUpperCase());
+  const svgText = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    + `<rect width="32" height="32" rx="8" fill="hsl(${hue},58%,50%)"/>`
+    + `<text x="16" y="22" font-size="17" font-family="Segoe UI,sans-serif" font-weight="600" fill="#fff" text-anchor="middle">${letter}</text>`
+    + '</svg>';
+  return 'data:image/svg+xml,' + encodeURIComponent(svgText);
+}
+
+const urlNode = (id, name, url, days) => ({
+  id, name, type: 'url', url,
+  date_added: Date.now() - days * 86400000,
+});
+const folderNode = (id, name, children) => ({ id, name, type: 'folder', children, date_added: Date.now() - 400 * 86400000 });
+
+function demoData() {
+  return {
+    version: 1,
+    roots: {
+      bookmark_bar: { id: '1', name: '收藏夹栏', type: 'folder', date_added: Date.now(), children: [
+        folderNode('4', '智能家居', [
+          urlNode('5', 'Home Assistant 官网', 'https://www.home-assistant.io/', 12),
+          urlNode('6', 'Home Assistant 中文文档', 'https://www.home-assistant.io/zh/docs/', 30),
+          urlNode('7', 'HACS 插件商店', 'https://hacs.xyz/', 65),
+        ]),
+        folderNode('8', '开发', [
+          urlNode('9', 'GitHub', 'https://github.com/', 3),
+          urlNode('10', 'MDN Web Docs', 'https://developer.mozilla.org/', 90),
+        ]),
+        urlNode('11', 'Home Assistant 社区', 'https://community.home-assistant.io/', 7),
+      ] },
+      other: { id: '2', name: '其他收藏夹', type: 'folder', date_added: Date.now(), children: [
+        folderNode('12', '待读', [
+          urlNode('13', 'ES 模块入门', 'https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Guide/Modules', 20),
+        ]),
+        urlNode('14', 'Netscape Bookmark 格式说明', 'https://msdn.microsoft.com/en-us/library/aa753582.aspx', 150),
+      ] },
+      synced: { id: '3', name: '移动设备收藏夹', type: 'folder', date_added: Date.now(), children: [
+        urlNode('15', '手机上的 HA 面板', 'http://homeassistant.local:8123/', 2),
+      ] },
+    },
+  };
+}
+
+const state = {
+  doc: demoData(),
+  currentId: '1',
+  expanded: new Set(['1', '2', '3', '4']),
+  query: '',
+  sortMode: 'custom',
+  dialog: null,
+  dragId: null,
+  seq: 100,
+};
+
+const $ = (selector) => host.querySelector(selector);
+const nextId = () => String(++state.seq);
+
+function status(text) {
+  document.getElementById('pvStatus').textContent = text;
+}
+
+function toast(message, isError = false) {
+  const el = $('#toast');
+  el.textContent = message;
+  el.className = `bm-toast show${isError ? ' error' : ''}`;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { el.className = 'bm-toast'; }, 2600);
+}
+
+/* ------------------------------------------------------------ 树操作 */
+function walk(callback) {
+  const recurse = (node, parent, ancestors) => {
+    callback(node, parent, ancestors);
+    if (node.type === 'folder') {
+      const chain = ancestors.concat(node);
+      (node.children || []).forEach((child) => recurse(child, node, chain));
+    }
+  };
+  ROOT_KEYS.forEach((key) => {
+    const root = state.doc.roots[key];
+    if (root) recurse(root, null, []);
+  });
+}
+
+function findNode(id) {
+  let hit = null;
+  walk((node, parent, ancestors) => { if (!hit && node.id === id) hit = { node, parent, ancestors }; });
+  return hit;
+}
+
+function activeFolderId() {
+  const hit = findNode(state.currentId);
+  return hit && hit.node.type === 'folder' ? state.currentId : '1';
+}
+
+function removeNode(id) {
+  let changed = false;
+  ROOT_KEYS.forEach((key) => {
+    const root = state.doc.roots[key];
+    const i = (root.children || []).findIndex((item) => item.id === id);
+    if (i >= 0) { root.children.splice(i, 1); changed = true; }
+  });
+  const strip = (node) => {
+    if (node.type !== 'folder') return;
+    const i = (node.children || []).findIndex((item) => item.id === id);
+    if (i >= 0) { node.children.splice(i, 1); changed = true; }
+    (node.children || []).forEach(strip);
+  };
+  ROOT_KEYS.forEach((key) => strip(state.doc.roots[key]));
+  return changed;
+}
+
+function moveNode(id, parentId) {
+  const hit = findNode(id);
+  const target = findNode(parentId);
+  if (!hit || !target || target.node.type !== 'folder') return false;
+  if (id === parentId) return false;
+  if ((target.ancestors || []).some((item) => item.id === id)) return false;
+  if (!removeNode(id)) return false;
+  target.node.children.push(hit.node);
+  return true;
+}
+
+function sorted(nodes) {
+  const list = nodes.slice();
+  if (state.sortMode === 'name') list.sort((a, b) => String(a.name).localeCompare(String(b.name), 'zh-CN'));
+  if (state.sortMode === 'date') list.sort((a, b) => (b.date_added || 0) - (a.date_added || 0));
+  return list;
+}
+
+function searchAll(query) {
+  const needle = query.toLowerCase();
+  const out = [];
+  walk((node, parent, ancestors) => {
+    if (node.type !== 'url') return;
+    if (`${node.name} ${node.url}`.toLowerCase().includes(needle)) {
+      out.push({ node, path: ancestors.map((item) => item.name) });
+    }
+  });
+  return out;
+}
+
+/* ------------------------------------------------------------ 渲染 */
+function render() {
+  renderTree();
+  renderContent();
+  const clear = $('.bm-search-clear');
+  if (clear) clear.hidden = !state.query;
+}
+
+function renderTree() {
+  const treeFolder = (folder, depth) => {
+    const children = folder.children || [];
+    const subs = children.filter((item) => item.type === 'folder');
+    const open = state.expanded.has(folder.id);
+    const selected = !state.query && folder.id === state.currentId;
+    const id = escapeHtml(folder.id);
+    let html = `<div class="bm-tree-row${selected ? ' selected' : ''}" data-act="select-folder" data-drop="folder" data-id="${id}" style="padding-left:${6 + depth * 16}px" draggable="true" title="${escapeHtml(folder.name)}">
+      <button class="bm-chevron${open ? ' open' : ''}${subs.length ? '' : ' empty'}" data-act="toggle-folder" data-id="${id}" title="展开/折叠">${ICONS.chevron}</button>
+      <span class="bm-tree-ico">${ICONS.folder}</span>
+      <span class="bm-tree-label">${escapeHtml(folder.name)}</span>
+      <span class="bm-tree-count">${children.length}</span>
+    </div>`;
+    if (open) html += subs.map((child) => treeFolder(child, depth + 1)).join('');
+    return html;
+  };
+  $('#tree').innerHTML = ROOT_KEYS.map((key) => treeFolder(state.doc.roots[key], 0)).join('');
+}
+
+function rowFolder(folder) {
+  const id = escapeHtml(folder.id);
+  const size = (folder.children || []).length;
+  return `<div class="bm-row" data-act="open-folder" data-drop="folder" data-id="${id}" draggable="true">
+    <span class="bm-fav bm-fav-folder">${ICONS.folder}</span>
+    <div class="bm-row-main">
+      <div class="bm-row-name">${escapeHtml(folder.name)}</div>
+      <div class="bm-row-url">文件夹 · ${size} 项</div>
+    </div>
+    <button class="bm-row-more" data-act="row-menu" data-id="${id}" title="更多">${ICONS.more}</button>
+  </div>`;
+}
+
+function rowUrl(node, pathText) {
+  const id = escapeHtml(node.id);
+  let sub = pathText;
+  if (!sub) { try { sub = new URL(node.url).host || node.url; } catch { sub = node.url; } }
+  return `<div class="bm-row" data-act="open-url" data-id="${id}" draggable="true">
+    <img class="bm-fav" src="${favicon(node)}" alt="" />
+    <div class="bm-row-main">
+      <div class="bm-row-name">${escapeHtml(node.name)}</div>
+      <div class="bm-row-url" title="${escapeHtml(node.url)}">${escapeHtml(sub)}</div>
+    </div>
+    <button class="bm-row-more" data-act="row-menu" data-id="${id}" title="更多">${ICONS.more}</button>
+  </div>`;
+}
+
+function emptyHtml(title, hint) {
+  return `<div class="bm-empty">${ICONS.folder}<p><strong>${escapeHtml(title)}</strong></p><p>${escapeHtml(hint)}</p></div>`;
+}
+
+function renderContent() {
+  const crumbs = $('#crumbs');
+  const title = $('#folderTitle');
+  const count = $('#folderCount');
+  const list = $('#list');
+
+  if (state.query) {
+    const results = searchAll(state.query);
+    crumbs.innerHTML = '<span class="bm-crumb-static">搜索结果</span>';
+    title.textContent = `“${state.query}” 的搜索结果`;
+    count.textContent = `${results.length} 项`;
+    list.innerHTML = results.length
+      ? results.map((item) => rowUrl(item.node, item.path.join(' / '))).join('')
+      : emptyHtml('没有找到匹配的收藏', '试试其他关键词');
+    return;
+  }
+
+  let found = findNode(state.currentId);
+  if (!found || found.node.type !== 'folder') {
+    state.currentId = '1';
+    found = findNode('1');
+  }
+  const folder = found.node;
+  const chain = (found.ancestors || []).concat(folder);
+  crumbs.innerHTML = chain.map((item, index) => {
+    const sep = index > 0 ? '<span class="bm-crumb-sep">/</span>' : '';
+    const cls = index === chain.length - 1 ? 'bm-crumb current' : 'bm-crumb';
+    return `${sep}<button class="${cls}" data-act="select-folder" data-id="${escapeHtml(item.id)}">${escapeHtml(item.name)}</button>`;
+  }).join('');
+
+  title.textContent = folder.name;
+  const children = folder.children || [];
+  count.textContent = `${children.length} 项`;
+  const folders = sorted(children.filter((item) => item.type === 'folder'));
+  const urls = sorted(children.filter((item) => item.type === 'url'));
+  list.innerHTML = (folders.length || urls.length)
+    ? folders.map(rowFolder).join('') + urls.map((item) => rowUrl(item)).join('')
+    : emptyHtml('此文件夹为空', '点击上方按钮添加收藏夹或文件夹，或从浏览器导入收藏夹文件');
+}
+
+/* ------------------------------------------------------------ 菜单 */
+function openMenu(ev, anchor, items) {
+  const rect = host.getBoundingClientRect();
+  let x = ev.clientX - rect.left;
+  let y = ev.clientY - rect.top;
+  if ((!x && !y) || ev.detail === 0) {
+    const box = anchor.getBoundingClientRect();
+    x = box.left - rect.left;
+    y = box.bottom - rect.top + 4;
+  }
+  const layer = $('#menuLayer');
+  layer.innerHTML = `<div class="bm-menu">${items.map((item) => {
+    if (item.sep) return '<div class="bm-menu-sep"></div>';
+    return `<button class="bm-menu-item${item.danger ? ' danger' : ''}" data-act="${escapeHtml(item.act)}" data-id="${escapeHtml(item.id || '')}" data-value="${escapeHtml(item.value || '')}">
+      ${item.icon || '<span class="bm-menu-spacer"></span>'}
+      <span>${escapeHtml(item.label)}</span><small>${item.check ? '✓' : ''}</small>
+    </button>`;
+  }).join('')}</div>`;
+  layer.classList.add('show');
+  // 菜单宽度随文案自适应（nowrap），渲染后实测再夹紧，避免溢出视口
+  const menu = layer.querySelector('.bm-menu');
+  const menuWidth = menu.offsetWidth || 224;
+  const menuHeight = menu.offsetHeight || 340;
+  x = Math.max(8, Math.min(x, Math.max(8, rect.width - menuWidth - 8)));
+  y = Math.max(8, Math.min(y, Math.max(8, rect.height - menuHeight - 8)));
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+}
+
+function closeMenu() {
+  const layer = $('#menuLayer');
+  layer.classList.remove('show');
+  layer.innerHTML = '';
+}
+
+const sortItems = () => [
+  { act: 'sort-set', value: 'custom', label: '自定义顺序', check: state.sortMode === 'custom' },
+  { act: 'sort-set', value: 'name', label: '按名称排序', check: state.sortMode === 'name' },
+  { act: 'sort-set', value: 'date', label: '按添加日期排序', check: state.sortMode === 'date' },
+];
+
+const moreItems = () => [
+  { act: 'import', label: '导入收藏夹…（默认合并）', icon: ICONS.upload },
+  { act: 'export-html', label: '导出收藏夹 (HTML)', icon: ICONS.download },
+  { act: 'export-json', label: '导出标准 JSON', icon: ICONS.download },
+  { sep: true },
+  ...sortItems(),
+  { sep: true },
+  { act: 'expand-all', label: '展开所有文件夹', icon: ICONS.chevron },
+  { act: 'collapse-all', label: '折叠所有文件夹', icon: ICONS.chevron },
+];
+
+function rowMenuItems(id) {
+  const found = findNode(id);
+  if (found && found.node.type === 'folder') {
+    return [
+      { act: 'open-folder', id, label: '打开文件夹', icon: ICONS.folder },
+      { act: 'rename', id, label: '重命名', icon: ICONS.edit },
+      { act: 'move-pick', id, label: '移动到…', icon: ICONS.move },
+      { sep: true },
+      { act: 'delete', id, label: '删除', icon: ICONS.trash, danger: true },
+    ];
+  }
+  return [
+    { act: 'open-url', id, label: '在新标签页打开', icon: ICONS.open },
+    { act: 'copy-url', id, label: '复制链接', icon: ICONS.copy },
+    { sep: true },
+    { act: 'rename', id, label: '编辑', icon: ICONS.edit },
+    { act: 'move-pick', id, label: '移动到…', icon: ICONS.move },
+    { sep: true },
+    { act: 'delete', id, label: '删除', icon: ICONS.trash, danger: true },
+  ];
+}
+
+/* ------------------------------------------------------------ 对话框 */
+function openDialog(options) {
+  state.dialog = options;
+  const fields = (options.fields || []).map((field) => {
+    if (field.type === 'select') {
+      const opts = field.options.map((item) => `<option value="${escapeHtml(item.value)}"${item.value === field.value ? ' selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
+      return `<label class="bm-field"><span>${escapeHtml(field.label)}</span><select data-field="${escapeHtml(field.name)}">${opts}</select></label>`;
+    }
+    if (field.type === 'file') {
+      return `<label class="bm-field"><span>${escapeHtml(field.label)}</span><input data-field="${escapeHtml(field.name)}" type="file" accept="${escapeHtml(field.accept || '.html,.htm,.json,text/html,application/json')}" /></label>`;
+    }
+    return `<label class="bm-field"><span>${escapeHtml(field.label)}</span><input data-field="${escapeHtml(field.name)}" type="text" value="${escapeHtml(field.value || '')}" placeholder="${escapeHtml(field.placeholder || '')}" /></label>`;
+  }).join('');
+
+  const layer = $('#dialogLayer');
+  layer.innerHTML = `<div class="bm-overlay"><div class="bm-dialog" role="dialog" aria-modal="true">
+    <h3>${escapeHtml(options.title)}</h3>
+    ${options.text ? `<p class="bm-dialog-text">${escapeHtml(options.text)}</p>` : ''}
+    <div class="bm-dialog-body">${fields}${options.hint ? `<p class="bm-field-hint">${escapeHtml(options.hint)}</p>` : ''}</div>
+    <div class="bm-dialog-foot">
+      <button class="bm-btn" data-act="dialog-cancel">取消</button>
+      <button class="bm-btn ${options.danger ? 'bm-btn-danger' : 'bm-btn-primary'}" data-act="dialog-ok">${escapeHtml(options.confirmText || '确定')}</button>
+    </div>
+  </div></div>`;
+  layer.classList.add('show');
+}
+
+function closeDialog() {
+  const layer = $('#dialogLayer');
+  layer.classList.remove('show');
+  layer.innerHTML = '';
+  state.dialog = null;
+}
+
+function dialogOk() {
+  const values = {};
+  $('#dialogLayer').querySelectorAll('[data-field]').forEach((el) => {
+    values[el.dataset.field] = el.type === 'file' ? (el.files && el.files[0]) || null : el.value;
+  });
+  const options = state.dialog;
+  closeDialog();
+  if (options && options.onOk) options.onOk(values);
+}
+
+/* ------------------------------------------------------------ 各类操作 */
+function commit(label) {
+  status(label || 'POST /api/bookmark  { 整份标准收藏树 } → Python 序列化为 bookmark.html');
+  render();
+}
+
+function addUrlDialog() {
+  openDialog({
+    title: '添加收藏夹', confirmText: '添加',
+    fields: [
+      { name: 'name', label: '名称', placeholder: '例如：Home Assistant' },
+      { name: 'url', label: '网址', placeholder: 'https://' },
+    ],
+    onOk: (values) => {
+      let url = String(values.url || '').trim();
+      if (!url) { toast('请输入网址', true); return; }
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+      const node = { id: nextId(), name: String(values.name || '').trim() || url, type: 'url', url, date_added: Date.now() };
+      findNode(activeFolderId()).node.children.push(node);
+      commit('POST /api/bookmark  ← 新增收藏「' + node.name + '」');
+      toast('已添加收藏夹');
+    },
+  });
+}
+
+function addFolderDialog() {
+  openDialog({
+    title: '添加文件夹', confirmText: '添加',
+    fields: [{ name: 'name', label: '文件夹名称', placeholder: '新文件夹' }],
+    onOk: (values) => {
+      const name = String(values.name || '').trim();
+      if (!name) { toast('请输入文件夹名称', true); return; }
+      const node = { id: nextId(), name, type: 'folder', children: [], date_added: Date.now() };
+      findNode(activeFolderId()).node.children.push(node);
+      state.expanded.add(node.id);
+      commit('POST /api/bookmark  ← 新增文件夹「' + name + '」');
+      toast('已添加文件夹');
+    },
+  });
+}
+
+function renameDialog(id) {
+  const found = findNode(id);
+  if (!found) return;
+  const isFolder = found.node.type === 'folder';
+  openDialog({
+    title: isFolder ? '重命名文件夹' : '编辑收藏夹', confirmText: '保存',
+    fields: [
+      { name: 'name', label: '名称', value: found.node.name },
+      ...(isFolder ? [] : [{ name: 'url', label: '网址', value: found.node.url }]),
+    ],
+    onOk: (values) => {
+      const name = String(values.name || '').trim();
+      if (!name) { toast('名称不能为空', true); return; }
+      found.node.name = name;
+      if (!isFolder) {
+        let url = String(values.url || '').trim();
+        if (!url) { toast('网址不能为空', true); return; }
+        if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+        found.node.url = url;
+      }
+      commit('POST /api/bookmark  ← 更新节点 ' + id);
+      toast('已保存');
+    },
+  });
+}
+
+function moveDialog(id) {
+  const found = findNode(id);
+  if (!found) return;
+  const options = [];
+  walk((node, parent, ancestors) => {
+    if (node.type !== 'folder') return;
+    options.push({ value: node.id, label: (ancestors || []).concat(node).map((item) => item.name).join(' / ') });
+  });
+  openDialog({
+    title: '移动到', confirmText: '移动',
+    fields: [{ name: 'parent', label: '目标文件夹', type: 'select', value: found.parent ? found.parent.id : '1', options }],
+    onOk: (values) => {
+      if (moveNode(id, values.parent)) {
+        commit('POST /api/bookmark  ← 移动节点 ' + id + ' → ' + values.parent);
+        toast('已移动');
+      } else {
+        toast('无法移动到该位置', true);
+      }
+    },
+  });
+}
+
+function deleteDialog(id) {
+  const found = findNode(id);
+  if (!found) return;
+  const isFolder = found.node.type === 'folder';
+  openDialog({
+    title: isFolder ? '删除文件夹' : '删除收藏夹',
+    text: `确定要删除“${found.node.name}”吗？${isFolder ? '其中的所有内容也会一并删除。' : ''}`,
+    confirmText: '删除', danger: true,
+    onOk: () => {
+      if (state.currentId === id) state.currentId = found.parent ? found.parent.id : '1';
+      if (removeNode(id)) {
+        commit('POST /api/bookmark  ← 删除节点 ' + id);
+        toast('已删除');
+      }
+    },
+  });
+}
+
+function importDialog(presetMode = 'merge') {
+  openDialog({
+    title: '导入收藏夹', confirmText: '导入',
+    text: '支持 Edge / Chrome / Firefox 导出的收藏 HTML，以及 Chrome / Edge 的 Bookmarks JSON。',
+    hint: '合并导入：把外部浏览器的收藏按根追加进来，HA 里已有的收藏保持不变。覆盖导入：清空现有全部收藏，只保留文件中的内容。',
+    fields: [
+      { name: 'file', label: '收藏夹文件', type: 'file' },
+      {
+        name: 'mode', label: '导入方式', type: 'select', value: presetMode,
+        options: [
+          { value: 'merge', label: '合并导入（保留现有收藏，默认）' },
+          { value: 'replace', label: '覆盖导入（清空现有收藏）' },
+        ],
+      },
+    ],
+    onOk: (values) => submitImport(values),
+  });
+}
+
+function submitImport(values) {
+  const file = values.file;
+  if (!file) { toast('请选择收藏夹文件', true); return; }
+  const mode = values.mode === 'replace' ? 'replace' : 'merge';
+
+  const run = () => {
+    const folder = {
+      id: nextId(), name: `来自 ${file.name}`, type: 'folder', date_added: Date.now(),
+      children: [
+        urlNode(nextId(), '示例：外部浏览器的收藏 A', 'https://example.com/a', 1),
+        urlNode(nextId(), '示例：外部浏览器的收藏 B', 'https://example.com/b', 1),
+        urlNode(nextId(), '示例：外部浏览器的收藏 C', 'https://example.com/c', 1),
+      ],
+    };
+    if (mode === 'replace') {
+      ROOT_KEYS.forEach((key) => { state.doc.roots[key].children = []; });
+      state.doc.roots.bookmark_bar.children.push(folder);
+    } else {
+      state.doc.roots.other.children.push(folder);
+    }
+    state.currentId = '1';
+    state.query = '';
+    const input = $('.bm-search-input');
+    if (input) input.value = '';
+    state.expanded.add(folder.id);
+    status(`POST /api/bookmark/import { filename: "${file.name}", content, mode: "${mode}" } → Python 解析并合并`);
+    render();
+    toast(mode === 'replace' ? '已覆盖导入 3 项收藏（预览演示）' : '已合并导入 3 项收藏（预览演示）');
+  };
+
+  if (mode === 'replace') {
+    openDialog({
+      title: '确认覆盖导入',
+      text: '覆盖导入会清空 HA 中现有的全部收藏，只保留所选文件中的内容。此操作不可撤销。',
+      confirmText: '确认覆盖', danger: true, onOk: run,
+    });
+  } else {
+    run();
+  }
+}
+
+function exportDoc(format) {
+  const now = new Date();
+  const name = format === 'json'
+    ? 'Bookmarks.json'
+    : `favorites_${now.getFullYear()}_${now.getMonth() + 1}_${now.getDate()}.html`;
+  status(`GET /api/bookmark/export?format=${format} → ${name}（Python 生成标准文件）`);
+  toast(`已导出 ${format === 'json' ? '标准 JSON' : '收藏 HTML'}（预览未真正下载）`);
+}
+
+/* ------------------------------------------------------------ 事件 */
+host.addEventListener('click', (ev) => {
+  const menuLayer = $('#menuLayer');
+  const fromMenu = !!ev.target.closest('.bm-menu');
+  if (menuLayer.classList.contains('show') && !fromMenu) closeMenu();
+  if (ev.target.classList && ev.target.classList.contains('bm-overlay')) { closeDialog(); return; }
+  const target = ev.target.closest('[data-act]');
+  if (!target) return;
+  const act = target.dataset.act;
+  const id = target.dataset.id || '';
+
+  switch (act) {
+    case 'toggle-sidebar': $('.bm-app').classList.toggle('sidebar-collapsed'); break;
+    case 'clear-search': {
+      const input = $('.bm-search-input');
+      input.value = ''; state.query = ''; render(); input.focus(); break;
+    }
+    case 'select-folder':
+      state.currentId = id;
+      if (host.classList.contains('narrow')) $('.bm-app').classList.add('sidebar-collapsed');
+      render();
+      break;
+    case 'toggle-folder':
+      if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
+      renderTree(); break;
+    case 'open-folder': state.currentId = id; state.expanded.add(id); render(); break;
+    case 'open-url': {
+      const found = findNode(id);
+      toast(found ? `预览模式：将打开 ${found.node.url}` : '预览模式：打开链接'); break;
+    }
+    case 'copy-url': {
+      const found = findNode(id);
+      toast(found ? `预览模式：已复制 ${found.node.url}` : '预览模式：复制链接'); break;
+    }
+    case 'add-url': addUrlDialog(); break;
+    case 'add-folder': addFolderDialog(); break;
+    case 'rename': renameDialog(id); break;
+    case 'move-pick': moveDialog(id); break;
+    case 'delete': deleteDialog(id); break;
+    case 'more': openMenu(ev, target, moreItems()); break;
+    case 'sort': openMenu(ev, target, sortItems()); break;
+    case 'sort-set': state.sortMode = target.dataset.value || 'custom'; renderContent(); break;
+    case 'row-menu': openMenu(ev, target, rowMenuItems(id)); break;
+    case 'import': importDialog(); break;
+    case 'export-html': exportDoc('html'); break;
+    case 'export-json': exportDoc('json'); break;
+    case 'expand-all': {
+      const ids = [];
+      walk((node) => { if (node.type === 'folder') ids.push(node.id); });
+      state.expanded = new Set(ids); renderTree(); break;
+    }
+    case 'collapse-all': state.expanded = new Set(); renderTree(); break;
+    case 'dialog-ok': dialogOk(); break;
+    case 'dialog-cancel': closeDialog(); break;
+    default: break;
+  }
+  if (fromMenu) closeMenu();
+});
+
+host.addEventListener('contextmenu', (ev) => {
+  const row = ev.target.closest('.bm-row');
+  if (!row || !row.dataset.id) return;
+  ev.preventDefault();
+  openMenu(ev, row, rowMenuItems(row.dataset.id));
+});
+
+host.addEventListener('input', (ev) => {
+  if (!ev.target.classList.contains('bm-search-input')) return;
+  state.query = ev.target.value.trim();
+  renderContent();
+  const clear = $('.bm-search-clear');
+  if (clear) clear.hidden = !state.query;
+});
+
+host.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') { closeMenu(); closeDialog(); }
+  else if (ev.key === 'Enter' && ev.target.tagName === 'INPUT' && ev.target.type !== 'file'
+    && $('#dialogLayer').classList.contains('show')) { ev.preventDefault(); dialogOk(); }
+});
+
+host.addEventListener('dragstart', (ev) => {
+  const row = ev.target.closest('[draggable="true"]');
+  if (!row || !row.dataset.id) return;
+  state.dragId = row.dataset.id;
+  ev.dataTransfer.effectAllowed = 'move';
+  row.classList.add('dragging');
+});
+host.addEventListener('dragover', (ev) => {
+  if (!state.dragId) return;
+  const drop = ev.target.closest('[data-drop="folder"]');
+  if (!drop || drop.dataset.id === state.dragId) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  host.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
+  drop.classList.add('drop-target');
+});
+host.addEventListener('drop', (ev) => {
+  if (!state.dragId) return;
+  const drop = ev.target.closest('[data-drop="folder"]');
+  if (!drop) return;
+  ev.preventDefault();
+  const source = state.dragId;
+  state.dragId = null;
+  host.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
+  if (moveNode(source, drop.dataset.id)) {
+    commit('POST /api/bookmark  ← 拖放移动节点 ' + source);
+    toast('已移动');
+  }
+  render();
+});
+host.addEventListener('dragend', () => {
+  state.dragId = null;
+  host.querySelectorAll('.dragging, .drop-target').forEach((el) => el.classList.remove('dragging', 'drop-target'));
+});
+
+/* ------------------------------------------------------------ 流程导览 */
+const STEPS = [
+  {
+    title: '界面总览',
+    desc: '这是 HA 自定义面板 <bookmark-panel> 的完整外观：顶栏工具栏（文件夹 / 搜索 / 添加 / 更多）、左侧文件夹树、右侧当前文件夹内容。',
+    points: [
+      '左侧固定三个根：收藏夹栏 / 其他收藏夹 / 移动设备收藏夹（Chrome/Edge 标准格式，不含预置网址）',
+      '右侧先列文件夹、再列收藏网址，面包屑可逐级返回；行右侧悬停出现 … 按钮',
+      '改动后前端把整份树 POST /api/bookmark，由 Python 序列化并落盘',
+    ],
+    run: () => { resetAll(); flash('.bm-body'); },
+  },
+  {
+    title: '浏览文件夹与面包屑',
+    desc: '点击左侧树或列表中的文件夹进入，面包屑显示完整路径并可直接跳回上层；三角形展开/折叠，侧栏顶部「全部折叠」一次收起。',
+    points: ['文件夹行显示「文件夹 · N 项」', '更多菜单里还有「展开所有文件夹 / 折叠所有文件夹」', '左上汉堡按钮可收起整个侧栏'],
+    run: () => { resetView(); state.currentId = '4'; state.expanded.add('4'); render(); flash('.bm-crumbs'); },
+  },
+  {
+    title: '搜索收藏夹',
+    desc: '顶栏搜索框实时过滤全部收藏（匹配名称与网址），结果里显示所在文件夹路径，右侧 × 清除。',
+    points: ['搜索时标题变为「"xxx" 的搜索结果」，左侧选中态暂时失效', '结果行仍可用 … 菜单编辑、移动、删除'],
+    run: () => {
+      resetView(); state.query = 'Home';
+      $('.bm-search-input').value = 'Home';
+      render(); flash('.bm-search');
+    },
+  },
+  {
+    title: '添加收藏夹 / 添加文件夹',
+    desc: '顶栏两个按钮分别打开对话框，新内容会加入「当前打开的文件夹」。',
+    points: ['添加收藏夹：名称 + 网址；网址未写协议会自动补 https://', '添加文件夹：只填名称，新建后自动展开', '点「添加」即触发 POST /api/bookmark 保存整份树'],
+    run: () => { resetView(); addUrlDialog(); },
+  },
+  {
+    title: '行菜单 / 右键菜单',
+    desc: '鼠标移到列表行会出现 … 按钮，也可直接右键该行，弹出上下文菜单。',
+    points: ['网址：在新标签页打开、复制链接、编辑、移动到…、删除', '文件夹：打开文件夹、重命名、移动到…、删除'],
+    run: () => {
+      resetView();
+      const row = $('#list .bm-row[data-act="open-url"]');
+      if (row) openMenu({ clientX: 0, clientY: 0, detail: 0 }, row, rowMenuItems(row.dataset.id));
+    },
+  },
+  {
+    title: '编辑 / 重命名 / 删除',
+    desc: '编辑与重命名都是文本对话框；删除会弹出红色危险按钮的二次确认，删除文件夹会连带删除其中全部内容。',
+    points: ['名称为空、网址为空时会给出错误提示条', '保存后统一 POST /api/bookmark'],
+    run: () => { resetView(); renameDialog(firstUrlId()); },
+  },
+  {
+    title: '移动到…',
+    desc: '下拉里列出所有文件夹的完整路径，选好目标后移动；也可以直接把行拖到左侧树的文件夹上。',
+    points: ['不允许把文件夹移进自己或自己的子文件夹', '拖放时目标文件夹会有蓝色描边提示'],
+    run: () => { resetView(); moveDialog(firstUrlId()); },
+  },
+  {
+    title: '排序方式',
+    desc: '列表标题右侧的排序按钮提供三种方式：自定义顺序 / 按名称排序 / 按添加日期排序，当前项带 ✓。',
+    points: ['文件夹与网址分组排序，文件夹始终在前', '更多菜单里也有同样的排序项'],
+    run: () => {
+      resetView();
+      const anchor = $('.bm-list-tools [data-act="sort"]');
+      openMenu({ clientX: 0, clientY: 0, detail: 0 }, anchor, sortItems());
+    },
+  },
+  {
+    title: '导入收藏夹（默认合并）',
+    desc: '更多 →「导入收藏夹…（默认合并）」，选择外部浏览器导出的标准收藏夹文件，导入方式默认「合并导入」。',
+    points: [
+      '支持 Edge / Chrome / Firefox 的收藏 HTML 与 Chrome / Edge 的 Bookmarks JSON',
+      '合并导入 = 按根追加，HA 里已有的收藏保持不变；对话框底部有两种方式的说明',
+      '提交 POST /api/bookmark/import { filename, content, mode }',
+    ],
+    run: () => { resetView(); importDialog('merge'); },
+  },
+  {
+    title: '覆盖导入二次确认',
+    desc: '把导入方式切到「覆盖导入（清空现有收藏）」再点导入，会先弹出红色确认框，明确告知操作不可撤销。',
+    points: ['取消则什么都不会发生；确认后只保留所选文件中的内容', '预览里可任选一个 .html / .json 文件，体验合并与覆盖的差别'],
+    run: () => { resetView(); importDialog('replace'); },
+  },
+  {
+    title: '导出收藏夹',
+    desc: '更多菜单里可导出两种格式：标准 Netscape HTML（浏览器可直接导入）与标准 Bookmarks JSON。',
+    points: [
+      'HTML 文件名与 Edge 一致：favorites_2026_11_9.html；JSON：Bookmarks.json',
+      '由 Python GET /api/bookmark/export?format=html|json 生成，内容与 .storage/bookmark.html 一致',
+    ],
+    run: () => {
+      resetView();
+      const anchor = $('.bm-actions [data-act="more"]');
+      openMenu({ clientX: 0, clientY: 0, detail: 0 }, anchor, moreItems());
+    },
+  },
+  {
+    title: '数据与存储说明',
+    desc: '界面只负责展示与交互，所有格式转换都在 Python 侧 convert.py 完成。',
+    points: [
+      '落盘：.storage/bookmark.html，内容是标准 Netscape Bookmark HTML',
+      '读取时 Python 解析成内存树，保存时序列化回 HTML',
+      '接口：GET/POST /api/bookmark、POST /api/bookmark/import、GET /api/bookmark/export',
+      '不做自动迁移，旧数据请用导入功能自行导入',
+    ],
+    run: () => { resetView(); flash('.bm-sidebar-foot'); },
+  },
+  {
+    title: 'HA 顶栏与侧边栏',
+    desc: '面板顶栏只是工具栏；标题与 HA 侧边栏入口由 HA 自带的 app bar 提供，两层各司其职、不重复。',
+    points: [
+      '窄屏 / 侧边栏为抽屉时 HA 顶栏出现（汉堡 + 「收藏」）；宽屏 docked 时 HA 顶栏隐藏',
+      '点 HA 汉堡派发 hass-toggle-menu 事件（bubbles + composed），home-assistant-main 收到后展开抽屉',
+      '面板左侧「文件夹」按钮只控制面板内的文件夹树，不会操作 HA 侧边栏',
+      '即使隐藏 HA 顶栏，面板也能派发同名事件呼出侧边栏，入口不依赖顶栏 DOM',
+    ],
+    run: () => {
+      resetView();
+      haToggle.checked = true;
+      applyHaHeader();
+      openHaDrawer();
+    },
+  },
+];
+
+function firstUrlId() {
+  let id = null;
+  walk((node) => { if (!id && node.type === 'url') id = node.id; });
+  return id || '1';
+}
+
+function resetView() {
+  closeMenu();
+  closeDialog();
+  state.query = '';
+  const input = $('.bm-search-input');
+  if (input) input.value = '';
+  state.currentId = '1';
+  state.expanded = new Set(['1', '2', '3', '4']);
+  $('.bm-app').classList.toggle('sidebar-collapsed', host.classList.contains('narrow'));
+  render();
+}
+
+function resetAll() {
+  state.doc = demoData();
+  state.seq = 100;
+  state.sortMode = 'custom';
+  resetView();
+  status('等待操作 · GET /api/bookmark 已由演示数据代替');
+}
+
+let flashTimer = null;
+function flash(selector) {
+  host.querySelectorAll('.pv-flash').forEach((el) => el.classList.remove('pv-flash'));
+  clearTimeout(flashTimer);
+  const el = host.querySelector(selector);
+  if (!el) return;
+  el.classList.add('pv-flash');
+  flashTimer = setTimeout(() => el.classList.remove('pv-flash'), 2600);
+}
+
+function showStep(index) {
+  const step = STEPS[index];
+  document.querySelectorAll('.pv-step').forEach((el, i) => el.classList.toggle('active', i === index));
+  document.getElementById('pvNote').innerHTML = `
+    <div class="pv-note-num">${String(index + 1).padStart(2, '0')}</div>
+    <div class="pv-note-body">
+      <h2>${escapeHtml(step.title)}</h2>
+      <p>${escapeHtml(step.desc)}</p>
+      <ul>${step.points.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+    </div>`;
+  closeHaDrawer();
+  step.run();
+}
+
+const stepsBox = document.getElementById('pvSteps');
+stepsBox.innerHTML = STEPS.map((step, i) =>
+  `<button class="pv-step" data-index="${i}"><i>${String(i + 1).padStart(2, '0')}</i>${escapeHtml(step.title)}</button>`
+).join('');
+stepsBox.addEventListener('click', (ev) => {
+  const button = ev.target.closest('.pv-step');
+  if (!button) return;
+  showStep(Number(button.dataset.index));
+  button.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+
+document.getElementById('pvReset').addEventListener('click', () => {
+  resetAll();
+  toast('演示数据已重置');
+});
+document.getElementById('pvDark').addEventListener('change', (ev) => {
+  host.classList.toggle('pv-dark', ev.target.checked);
+  host.classList.toggle('pv-light', !ev.target.checked);
+  document.body.classList.toggle('pv-dark', ev.target.checked);
+});
+
+/* 模拟 HA 自带 app bar 与侧边栏抽屉：对应真实环境的 hass-toggle-menu 事件 */
+const haToggle = document.getElementById('pvHaToggle');
+const haHeader = document.getElementById('pvHaHeader');
+const haLayer = document.getElementById('pvHaLayer');
+const haBrowser = document.querySelector('.pv-browser');
+
+function closeHaDrawer() {
+  haLayer.classList.remove('show');
+}
+function openHaDrawer() {
+  haLayer.classList.add('show');
+  status('hass-toggle-menu { open: true } → home-assistant-main 展开 HA 侧边栏抽屉');
+}
+function applyHaHeader() {
+  const show = haToggle.checked;
+  haHeader.hidden = !show;
+  haBrowser.classList.toggle('has-ha-header', show);
+  if (!show) closeHaDrawer();
+}
+haToggle.addEventListener('change', applyHaHeader);
+document.getElementById('pvHaMenu').addEventListener('click', openHaDrawer);
+document.getElementById('pvHaMask').addEventListener('click', closeHaDrawer);
+haLayer.querySelectorAll('[data-ha-item]').forEach((item) => {
+  item.addEventListener('click', () => {
+    closeHaDrawer();
+    toast(`预览模式：HA 侧边栏「${item.dataset.haItem}」`);
+  });
+});
+
+/* 模拟 HA 在窄屏注入 narrow：视口 <= 870px 自动生效，也可用「手机视图」手动强制 */
+const narrowBox = document.getElementById('pvNarrow');
+const narrowQuery = window.matchMedia('(max-width: 870px)');
+function applyNarrow() {
+  const wasNarrow = host.classList.contains('narrow');
+  const narrow = narrowBox.checked || narrowQuery.matches;
+  host.classList.toggle('narrow', narrow);
+  // 桌面手动强制时把模拟窗口收成手机宽度；真机窄屏则保持铺满
+  document.querySelector('.pv-browser').classList.toggle(
+    'pv-phone', narrowBox.checked && !narrowQuery.matches
+  );
+  if (narrow !== wasNarrow) {
+    $('.bm-app').classList.toggle('sidebar-collapsed', narrow);
+  }
+}
+narrowBox.checked = narrowQuery.matches;
+narrowQuery.addEventListener('change', () => {
+  narrowBox.checked = narrowQuery.matches;
+  applyNarrow();
+});
+narrowBox.addEventListener('change', applyNarrow);
+applyNarrow();
+
+showStep(0);
+</script>
+</body>
+</html>
