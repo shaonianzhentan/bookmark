@@ -7,8 +7,8 @@
  */
 import { STYLES } from './bookmark-styles.js';
 import {
-  ROOT_KEYS,
   addNode,
+  addRoot,
   emptyDocument,
   ensureDocument,
   escapeHtml,
@@ -112,8 +112,8 @@ class BookmarkPanel extends HTMLElement {
     this.shadowRoot.innerHTML = `<style>${STYLES}</style>${TEMPLATE}`;
 
     this.doc = emptyDocument();
-    this.currentId = '1';
-    this.expanded = new Set(['1', '2', '3']);
+    this.currentId = null;
+    this.expanded = new Set();
     this.query = '';
     this.sortMode = 'custom';
     this.error = '';
@@ -234,7 +234,10 @@ class BookmarkPanel extends HTMLElement {
 
   _activeFolderId() {
     const found = findNode(this.doc, this.currentId);
-    return found && found.node.type === 'folder' ? this.currentId : '1';
+    if (found && found.node.type === 'folder') return this.currentId;
+    // 没有选中文件夹时，默认用第一个根目录
+    const firstRoot = (this.doc.roots || []).find((item) => item.type === 'folder');
+    return firstRoot ? firstRoot.id : null;
   }
 
   /* ------------------------------------------------------------ 渲染 */
@@ -247,8 +250,8 @@ class BookmarkPanel extends HTMLElement {
   }
 
   _renderTree() {
-    this.$('#tree').innerHTML = ROOT_KEYS
-      .map((key) => this._treeFolder(this.doc.roots[key], 0))
+    this.$('#tree').innerHTML = (this.doc.roots || [])
+      .map((root) => this._treeFolder(root, 0))
       .join('');
   }
 
@@ -297,8 +300,20 @@ class BookmarkPanel extends HTMLElement {
 
     let found = findNode(this.doc, this.currentId);
     if (!found || found.node.type !== 'folder') {
-      this.currentId = '1';
-      found = findNode(this.doc, '1');
+      // 没有任何根目录：展示创建引导
+      if (!this.doc.roots || !this.doc.roots.length) {
+        crumbs.innerHTML = '';
+        title.textContent = '网页收藏';
+        count.textContent = '';
+        list.innerHTML = this._empty(
+          '还没有任何收藏',
+          '点击上方「添加文件夹」可创建根目录，或从「更多」导入浏览器收藏夹文件',
+        );
+        return;
+      }
+      this.currentId = this._activeFolderId();
+      found = findNode(this.doc, this.currentId);
+      if (!found || found.node.type !== 'folder') return;
     }
     const folder = found.node;
     const chain = found.ancestors.concat(folder);
@@ -531,6 +546,10 @@ class BookmarkPanel extends HTMLElement {
     const ext = this._extTabInfo || {};
     // 默认分类 = 当前所在文件夹（可在对话框里改成其它分类）
     const activeId = this._activeFolderId();
+    if (!activeId) {
+      this._toast('请先创建根目录或文件夹', true);
+      return;
+    }
     const { options, selectedId } = this._folderOptions(activeId);
     this._openDialog({
       title: '添加收藏夹',
@@ -579,10 +598,20 @@ class BookmarkPanel extends HTMLElement {
           this._toast('请输入文件夹名称', true);
           return;
         }
-        const node = addNode(this.doc, this._activeFolderId(), { name, type: 'folder' });
+        const parentId = this._activeFolderId();
+        // 未选中任何文件夹时，作为顶层根目录创建；否则建为当前文件夹的子文件夹
+        let node;
+        let asRoot = false;
+        if (!parentId) {
+          node = addRoot(this.doc, { name, type: 'folder' });
+          asRoot = true;
+          if (node) this.currentId = node.id;
+        } else {
+          node = addNode(this.doc, parentId, { name, type: 'folder' });
+        }
         if (node) this.expanded.add(node.id);
         await this._commit();
-        this._toast('已添加文件夹');
+        this._toast(asRoot ? '已创建根目录' : '已添加文件夹');
       },
     });
   }
@@ -624,7 +653,12 @@ class BookmarkPanel extends HTMLElement {
   _moveDialog(id) {
     const found = findNode(this.doc, id);
     if (!found) return;
-    const { options, selectedId } = this._folderOptions(found.parent ? found.parent.id : '1');
+    const { options } = this._folderOptions(found.parent ? found.parent.id : '');
+    // 文件夹可以移动到顶层根目录
+    if (found.node.type === 'folder') {
+      options.unshift({ value: '', label: '（移动到根目录）' });
+    }
+    const selectedId = found.parent ? found.parent.id : '';
     this._openDialog({
       title: '移动到',
       confirmText: '移动',
@@ -654,7 +688,9 @@ class BookmarkPanel extends HTMLElement {
       danger: true,
       onOk: async () => {
         if (this.currentId === id) {
-          this.currentId = found.parent ? found.parent.id : '1';
+          this.currentId = found.parent
+            ? found.parent.id
+            : ((this.doc.roots || []).find((r) => r.id !== id && r.type === 'folder') || {}).id || null;
         }
         if (removeNode(this.doc, id)) {
           await this._commit();
@@ -770,7 +806,7 @@ class BookmarkPanel extends HTMLElement {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const result = await res.json();
         this.doc = ensureDocument(result.doc);
-        this.currentId = '1';
+        this.currentId = (this.doc.roots || []).find((r) => r.type === 'folder')?.id || null;
         this.query = '';
         const search = this.$('.bm-search-input');
         if (search) search.value = '';

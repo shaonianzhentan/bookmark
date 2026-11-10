@@ -713,7 +713,6 @@ const TEMPLATE = `
 /* ==================================================================
    以下为预览专用逻辑：内存演示数据 + 界面交互 + 流程导览
    ================================================================== */
-const ROOT_KEYS = ['bookmark_bar', 'other', 'synced'];
 const host = document.getElementById('pvHost');
 host.innerHTML = TEMPLATE;
 
@@ -748,8 +747,8 @@ const folderNode = (id, name, children) => ({ id, name, type: 'folder', children
 function demoData() {
   return {
     version: 1,
-    roots: {
-      bookmark_bar: { id: '1', name: '收藏夹栏', type: 'folder', date_added: Date.now(), children: [
+    roots: [
+      { id: '1', name: '收藏夹栏', type: 'folder', date_added: Date.now(), children: [
         folderNode('4', '智能家居', [
           urlNode('5', 'Home Assistant 官网', 'https://www.home-assistant.io/', 12),
           urlNode('6', 'Home Assistant 中文文档', 'https://www.home-assistant.io/zh/docs/', 30),
@@ -761,16 +760,16 @@ function demoData() {
         ]),
         urlNode('11', 'Home Assistant 社区', 'https://community.home-assistant.io/', 7),
       ] },
-      other: { id: '2', name: '其他收藏夹', type: 'folder', date_added: Date.now(), children: [
+      { id: '2', name: '其他收藏夹', type: 'folder', date_added: Date.now(), children: [
         folderNode('12', '待读', [
           urlNode('13', 'ES 模块入门', 'https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Guide/Modules', 20),
         ]),
         urlNode('14', 'Netscape Bookmark 格式说明', 'https://msdn.microsoft.com/en-us/library/aa753582.aspx', 150),
       ] },
-      synced: { id: '3', name: '移动设备收藏夹', type: 'folder', date_added: Date.now(), children: [
+      { id: '3', name: '移动设备收藏夹', type: 'folder', date_added: Date.now(), children: [
         urlNode('15', '手机上的 HA 面板', 'http://homeassistant.local:8123/', 2),
       ] },
-    },
+    ],
   };
 }
 
@@ -809,8 +808,7 @@ function walk(callback) {
       (node.children || []).forEach((child) => recurse(child, node, chain));
     }
   };
-  ROOT_KEYS.forEach((key) => {
-    const root = state.doc.roots[key];
+  (state.doc.roots || []).forEach((root) => {
     if (root) recurse(root, null, []);
   });
 }
@@ -842,18 +840,16 @@ function folderOptions(selectedId) {
 
 function removeNode(id) {
   let changed = false;
-  ROOT_KEYS.forEach((key) => {
-    const root = state.doc.roots[key];
-    const i = (root.children || []).findIndex((item) => item.id === id);
-    if (i >= 0) { root.children.splice(i, 1); changed = true; }
-  });
+  const roots = state.doc.roots || [];
+  const i = roots.findIndex((item) => item.id === id);
+  if (i >= 0) { roots.splice(i, 1); changed = true; }
   const strip = (node) => {
     if (node.type !== 'folder') return;
-    const i = (node.children || []).findIndex((item) => item.id === id);
-    if (i >= 0) { node.children.splice(i, 1); changed = true; }
+    const j = (node.children || []).findIndex((item) => item.id === id);
+    if (j >= 0) { node.children.splice(j, 1); changed = true; }
     (node.children || []).forEach(strip);
   };
-  ROOT_KEYS.forEach((key) => strip(state.doc.roots[key]));
+  roots.forEach(strip);
   return changed;
 }
 
@@ -911,7 +907,7 @@ function renderTree() {
     if (open) html += subs.map((child) => treeFolder(child, depth + 1)).join('');
     return html;
   };
-  $('#tree').innerHTML = ROOT_KEYS.map((key) => treeFolder(state.doc.roots[key], 0)).join('');
+  $('#tree').innerHTML = (state.doc.roots || []).map((root) => treeFolder(root, 0)).join('');
 }
 
 function rowFolder(folder) {
@@ -1143,10 +1139,17 @@ function addFolderDialog() {
       const name = String(values.name || '').trim();
       if (!name) { toast('请输入文件夹名称', true); return; }
       const node = { id: nextId(), name, type: 'folder', children: [], date_added: Date.now() };
-      findNode(activeFolderId()).node.children.push(node);
+      const parentId = activeFolderId();
+      if (parentId) {
+        findNode(parentId).node.children.push(node);
+        state.expanded.add(parentId);
+      } else {
+        state.doc.roots.push(node);
+      }
+      state.currentId = node.id;
       state.expanded.add(node.id);
       commit('POST /api/bookmark  ← 新增文件夹「' + name + '」');
-      toast('已添加文件夹');
+      toast(parentId ? '已添加文件夹' : '已创建根目录');
     },
   });
 }
@@ -1247,12 +1250,11 @@ function submitImport(values) {
       ],
     };
     if (mode === 'replace') {
-      ROOT_KEYS.forEach((key) => { state.doc.roots[key].children = []; });
-      state.doc.roots.bookmark_bar.children.push(folder);
+      state.doc.roots = [folder];
     } else {
-      state.doc.roots.other.children.push(folder);
+      state.doc.roots.push(folder);
     }
-    state.currentId = '1';
+    state.currentId = folder.id;
     state.query = '';
     const input = $('.bm-search-input');
     if (input) input.value = '';

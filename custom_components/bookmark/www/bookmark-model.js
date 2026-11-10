@@ -6,13 +6,8 @@
  * 新增节点的 date_added / guid 由后端 normalize_document 统一补全。
  */
 
-export const ROOT_KEYS = ['bookmark_bar', 'other', 'synced'];
-
-const ROOT_META = {
-  bookmark_bar: { id: '1', name: '收藏夹栏' },
-  other: { id: '2', name: '其他收藏夹' },
-  synced: { id: '3', name: '移动设备收藏夹' },
-};
+// 顶层根目录是一个普通 folder 节点的数组（doc.roots），由用户自行创建或从导入产生，
+// 不再预置「收藏夹栏 / 其他收藏 / 移动设备收藏」三个固定根。
 
 export function escapeHtml(value) {
   return String(value ?? '')
@@ -24,30 +19,19 @@ export function escapeHtml(value) {
 }
 
 export function emptyDocument() {
-  const roots = {};
-  for (const key of ROOT_KEYS) {
-    roots[key] = {
-      children: [],
-      id: ROOT_META[key].id,
-      name: ROOT_META[key].name,
-      type: 'folder',
-    };
-  }
-  return { version: 1, roots };
+  return { version: 1, roots: [] };
 }
 
 /** 后端返回的文档已是标准结构，这里只做最小防御 */
 export function ensureDocument(raw) {
-  if (!raw || !raw.roots) return emptyDocument();
-  for (const key of ROOT_KEYS) {
-    const root = raw.roots[key];
-    if (!root || !Array.isArray(root.children)) return emptyDocument();
-  }
+  if (!raw || !Array.isArray(raw.roots)) return emptyDocument();
   return raw;
 }
 
-/** 遍历所有节点（含三个根），回调 (node, parentFolder, ancestors) */
+/** 遍历所有节点（含所有根目录），回调 (node, parentFolder, ancestors)。
+ *  根目录的 parent 为 null，ancestors 为空数组。 */
 export function walkNodes(doc, visitor) {
+  const roots = (doc?.roots || []).filter((item) => item && item.type === 'folder');
   const recurse = (node, parent, ancestors) => {
     visitor(node, parent, ancestors);
     if (node.type === 'folder' && Array.isArray(node.children)) {
@@ -55,10 +39,7 @@ export function walkNodes(doc, visitor) {
       for (const child of node.children) recurse(child, node, next);
     }
   };
-  for (const key of ROOT_KEYS) {
-    const root = doc?.roots?.[key];
-    if (root) recurse(root, null, []);
-  }
+  for (const root of roots) recurse(root, null, []);
 }
 
 export function findNode(doc, id) {
@@ -96,6 +77,14 @@ export function addNode(doc, parentId, node, index = -1) {
   return copy;
 }
 
+/** 在顶层直接新增一个根目录节点（parentId 为空时 moveNode 也走这里） */
+export function addRoot(doc, node) {
+  const copy = { ...node, id: nextId(doc) };
+  if (copy.type === 'folder') copy.children = copy.children || [];
+  doc.roots.push(copy);
+  return copy;
+}
+
 export function updateNode(doc, id, patch) {
   const found = findNode(doc, id);
   if (!found) return false;
@@ -105,26 +94,53 @@ export function updateNode(doc, id, patch) {
 
 export function removeNode(doc, id) {
   const found = findNode(doc, id);
-  if (!found || !found.parent || found.index < 0) return false;
-  found.parent.children.splice(found.index, 1);
+  if (!found) return false;
+  if (found.parent) {
+    if (found.index < 0) return false;
+    found.parent.children.splice(found.index, 1);
+  } else {
+    // 根目录：从 doc.roots 中移除
+    const idx = doc.roots.indexOf(found.node);
+    if (idx < 0) return false;
+    doc.roots.splice(idx, 1);
+  }
   return true;
 }
 
 export function moveNode(doc, id, parentId, index = -1) {
   if (id === parentId) return false;
   const found = findNode(doc, id);
-  const target = findNode(doc, parentId);
-  if (!found || !target || !found.parent || target.node.type !== 'folder') return false;
-  // 禁止把文件夹移进自己的后代
-  if (found.node.type === 'folder'
-    && [...target.ancestors, target.node].some((item) => item.id === id)) {
-    return false;
+  if (!found) return false;
+
+  // parentId 为空（'' 或 null）表示移动到根目录，只有文件夹可作为根目录
+  let targetList;
+  let target = null;
+  if (parentId === '' || parentId == null) {
+    if (found.node.type !== 'folder') return false;
+    targetList = doc.roots;
+  } else {
+    target = findNode(doc, parentId);
+    if (!target || target.node.type !== 'folder') return false;
+    // 禁止把文件夹移进自己的后代
+    if (found.node.type === 'folder'
+      && [...target.ancestors, target.node].some((item) => item.id === id)) {
+      return false;
+    }
+    targetList = target.node.children;
   }
 
-  found.parent.children.splice(found.index, 1);
-  const list = target.node.children;
-  if (index >= 0 && index <= list.length) list.splice(index, 0, found.node);
-  else list.push(found.node);
+  // 先从原位置移除（根目录或普通文件夹）
+  if (found.parent) {
+    if (found.index < 0) return false;
+    found.parent.children.splice(found.index, 1);
+  } else {
+    const idx = doc.roots.indexOf(found.node);
+    if (idx < 0) return false;
+    doc.roots.splice(idx, 1);
+  }
+
+  if (index >= 0 && index <= targetList.length) targetList.splice(index, 0, found.node);
+  else targetList.push(found.node);
   return true;
 }
 

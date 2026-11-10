@@ -1,7 +1,7 @@
 {
   "domain": "bookmark",
   "name": "网页收藏",
-  "version": "2026.11.10",
+  "version": "2026.11.11",
   "config_flow": true,
   "documentation": "https://github.com/shaonianzhentan/bookmark",
   "dependencies": [],

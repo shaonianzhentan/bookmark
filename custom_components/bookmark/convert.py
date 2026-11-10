@@ -4,13 +4,14 @@
 
 * 落盘文件：``<config>/.storage/bookmark.html``，内容是标准 Netscape Bookmark HTML
   （与 Edge 导出的 ``favorites_2026_11_9.html`` 同格式）。
-* 内存 / 接口数据：Chrome / Edge ``Bookmarks`` JSON 树
-  ``{version, roots: {bookmark_bar, other, synced}}``，节点 ``type=url|folder``，
+* 内存 / 接口数据：标准收藏文档
+  ``{version, roots: [ <folder>, ... ]}``，``roots`` 是一个**顶层根目录列表**，
+  每个根目录都是一个 ``type=folder`` 节点，其下可再嵌套文件夹与网址。
+  根目录由用户自己创建或从导入产生，组件**不再预置**「收藏夹栏 / 其他收藏 / 移动设备收藏」。
   ``date_added`` / ``date_modified`` 为 Chrome 纪元（1601-01-01 起微秒数，字符串）。
-  Python 用 :func:`parse_netscape_html` 读入、:func:`to_netscape_html` 写回。
 * 可导入格式：Netscape Bookmark HTML、Chrome / Edge Bookmarks JSON、
   以及旧版扁平数组 ``[{url, name, category, time}]``（仅为导入兼容，不做自动迁移）。
-* 可导出格式：标准 Netscape Bookmark HTML、标准 Bookmarks JSON。
+* 可导出格式：标准 Netscape Bookmark HTML、标准 Bookmarks JSON（即本模块的文档结构）。
 
 ``bookmark.html`` 不存在时按空收藏夹处理；需要导入既有数据时由用户在界面上
 使用「导入收藏夹」功能自行导入，本模块不自动读取或改动任何其它文件。
@@ -30,24 +31,6 @@ from typing import Any, Iterator
 
 # Chrome 纪元与 Unix 纪元相差 11644473600 秒
 CHROME_EPOCH_OFFSET = 11644473600000000
-
-ROOT_FOLDERS = {
-    "bookmark_bar": ("1", "收藏夹栏"),
-    "other": ("2", "其他收藏夹"),
-    "synced": ("3", "移动设备收藏夹"),
-}
-
-BAR_NAMES = {
-    "收藏夹栏", "书签栏", "favorites bar", "bookmarks bar", "bookmarks toolbar",
-    "favourites bar", "barre de favoris", "favoritenleiste",
-}
-OTHER_NAMES = {
-    "其他收藏夹", "其他书签", "other bookmarks", "other favorites",
-    "autres favoris", "weitere lesezeichen",
-}
-SYNCED_NAMES = {
-    "移动设备收藏夹", "移动设备书签", "移动书签", "mobile bookmarks", "mobile favorites",
-}
 
 _ATTR_RE = re.compile(
     r"([A-Za-z_:][\w:.-]*)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))"
@@ -99,39 +82,8 @@ def _guid() -> str:
 # ---------------------------------------------------------------- 文档
 
 def empty_document() -> dict[str, Any]:
-    """一份空的标准收藏文档。"""
-    now = chrome_now()
-    roots = {}
-    for key, (node_id, name) in ROOT_FOLDERS.items():
-        roots[key] = {
-            "children": [],
-            "date_added": now,
-            "date_modified": now,
-            "guid": _guid(),
-            "id": node_id,
-            "name": name,
-            "type": "folder",
-        }
-    return {"roots": roots, "version": 1}
-
-
-def walk_nodes(doc: dict) -> Iterator[tuple[dict, dict | None, list[dict]]]:
-    """遍历所有节点（含三个根），产出 (node, parent_folder, ancestors)。"""
-    def recurse(node: dict, parent: dict | None, ancestors: list[dict]):
-        yield node, parent, ancestors
-        if node.get("type") == "folder" and isinstance(node.get("children"), list):
-            chain = ancestors + [node]
-            for child in node["children"]:
-                yield from recurse(child, node, chain)
-
-    for key in ROOT_FOLDERS:
-        root = (doc.get("roots") or {}).get(key)
-        if isinstance(root, dict):
-            yield from recurse(root, None, [])
-
-
-def count_urls(doc: dict) -> int:
-    return sum(1 for node, _, _ in walk_nodes(doc) if node.get("type") == "url")
+    """一份空的标准收藏文档（没有默认根目录，根目录由用户自行创建或导入产生）。"""
+    return {"roots": [], "version": 1}
 
 
 def _take_id(used: set[str], counter: list[int]) -> str:
@@ -142,79 +94,116 @@ def _take_id(used: set[str], counter: list[int]) -> str:
     return node_id
 
 
-def _clean_children(
-    raw_children: list[Any], used: set[str], counter: list[int]
-) -> list[dict]:
-    """清洗节点，补全字段（含时间 / guid）并保证 id 全局唯一。"""
-    result: list[dict] = []
-    for raw in raw_children:
-        if not isinstance(raw, dict) or raw.get("type") not in ("url", "folder"):
-            continue
+def _clean_node(
+    raw: Any, used: set[str], counter: list[int]
+) -> dict[str, Any] | None:
+    """清洗单个节点（url 或 folder），补全字段（含时间 / guid）并保证 id 全局唯一。"""
+    if not isinstance(raw, dict) or raw.get("type") not in ("url", "folder"):
+        return None
 
-        node_id = str(raw.get("id") or "")
-        if not node_id or node_id in used:
-            node_id = _take_id(used, counter)
-        used.add(node_id)
-        if node_id.isdigit():
-            counter[0] = max(counter[0], int(node_id) + 1)
+    node_id = str(raw.get("id") or "")
+    if not node_id or node_id in used:
+        node_id = _take_id(used, counter)
+    used.add(node_id)
+    if node_id.isdigit():
+        counter[0] = max(counter[0], int(node_id) + 1)
 
-        node: dict[str, Any] = {
-            "date_added": str(raw.get("date_added") or chrome_now()),
-            "guid": str(raw.get("guid") or _guid()),
-            "id": node_id,
-            "name": str(raw.get("name") or "未命名"),
-            "type": raw["type"],
-        }
-        if raw["type"] == "url":
-            url = raw.get("url")
-            if not isinstance(url, str) or not url:
-                used.discard(node_id)
-                continue
-            node["url"] = url
-            icon = raw.get("icon")
-            if isinstance(icon, str) and icon:
-                node["icon"] = icon
-        else:
-            node["date_modified"] = str(raw.get("date_modified") or node["date_added"])
-            children = raw.get("children")
-            node["children"] = (
-                _clean_children(children, used, counter)
-                if isinstance(children, list)
-                else []
-            )
-        result.append(node)
-    return result
+    node: dict[str, Any] = {
+        "date_added": str(raw.get("date_added") or chrome_now()),
+        "guid": str(raw.get("guid") or _guid()),
+        "id": node_id,
+        "name": str(raw.get("name") or "未命名"),
+        "type": raw["type"],
+    }
+    if raw["type"] == "url":
+        url = raw.get("url")
+        if not isinstance(url, str) or not url:
+            return None
+        node["url"] = url
+        icon = raw.get("icon")
+        if isinstance(icon, str) and icon:
+            node["icon"] = icon
+    else:
+        node["date_modified"] = str(raw.get("date_modified") or node["date_added"])
+        children = raw.get("children")
+        node["children"] = (
+            [c for c in (_clean_node(c, used, counter) for c in children) if c]
+            if isinstance(children, list)
+            else []
+        )
+    return node
+
+
+def walk_nodes(doc: dict) -> Iterator[tuple[dict, dict | None, list[dict]]]:
+    """遍历所有节点（含所有根目录），产出 (node, parent_folder, ancestors)。
+
+    根目录的 parent 为 None，ancestors 为空列表。
+    """
+    roots = (doc.get("roots") or []) if isinstance(doc, dict) else []
+
+    def recurse(node: dict, parent: dict | None, ancestors: list[dict]):
+        yield node, parent, ancestors
+        if node.get("type") == "folder" and isinstance(node.get("children"), list):
+            chain = ancestors + [node]
+            for child in node["children"]:
+                yield from recurse(child, node, chain)
+
+    for root in roots:
+        if isinstance(root, dict):
+            yield from recurse(root, None, [])
+
+
+def count_urls(doc: dict) -> int:
+    return sum(1 for node, _, _ in walk_nodes(doc) if node.get("type") == "url")
 
 
 def normalize_document(data: Any) -> dict[str, Any] | None:
-    """校验并规整标准收藏文档，非法时返回 None。前端新增的节点在这里补齐时间与 guid。"""
-    if not isinstance(data, dict) or not isinstance(data.get("roots"), dict):
+    """校验并规整标准收藏文档，非法时返回 None。
+
+    接受两种 ``roots`` 形式：
+
+    * 列表 ``[<folder>, ...]``（本模块的标准结构）；
+    * 字典 ``{bookmark_bar, other, synced}``（Chrome / Edge Bookmarks JSON 风格），
+      此时按值逐个规整为根目录。
+
+    前端新增的节点在这里补齐时间与 guid、并保证 id 全局唯一。
+    """
+    if not isinstance(data, dict):
+        return None
+
+    roots_raw = data.get("roots")
+    if not isinstance(roots_raw, (list, dict)):
         return None
 
     doc = empty_document()
-    used = {node_id for node_id, _ in ROOT_FOLDERS.values()}
+    used: set[str] = set()
     counter = [4]
-    for key in ROOT_FOLDERS:
-        source = data["roots"].get(key)
-        if not isinstance(source, dict):
-            continue
-        target = doc["roots"][key]
-        if isinstance(source.get("children"), list):
-            target["children"] = _clean_children(source["children"], used, counter)
-        for field in ("name", "date_added", "date_modified", "guid"):
-            value = source.get(field)
-            if isinstance(value, str) and value:
-                target[field] = value
+
+    if isinstance(roots_raw, dict):
+        for source in roots_raw.values():
+            if not isinstance(source, dict) or source.get("type") != "folder":
+                continue
+            node = _clean_node(source, used, counter)
+            if node:
+                doc["roots"].append(node)
+    else:
+        for source in roots_raw:
+            node = _clean_node(source, used, counter)
+            if node and node.get("type") == "folder":
+                doc["roots"].append(node)
+
     return doc
 
 
 def from_legacy(items: list[Any]) -> dict[str, Any]:
-    """旧版扁平数组 -> 标准收藏树：category 变成收藏夹栏下的同名文件夹。"""
+    """旧版扁平数组 -> 标准收藏树：category 中的 '/' 视为层级分隔符，
+
+    第一段成为根目录（一级分类），后续段依次嵌套；无 category 的条目归入
+    「其他收藏夹」根目录。
+    """
     doc = empty_document()
-    bar = doc["roots"]["bookmark_bar"]["children"]
-    other = doc["roots"]["other"]["children"]
-    folders: dict[str, dict] = {}
-    counter = 4
+    roots = doc["roots"]
+    path_map: dict[tuple[str, ...], dict[str, Any]] = {}
 
     for item in items:
         if not isinstance(item, dict):
@@ -224,47 +213,50 @@ def from_legacy(items: list[Any]) -> dict[str, Any]:
             continue
 
         node = {
-            "date_added": ms_to_chrome(item.get("time")),
-            "guid": _guid(),
-            "id": str(counter),
-            "name": str(item.get("name") or url),
             "type": "url",
+            "name": str(item.get("name") or url),
             "url": url,
+            "date_added": ms_to_chrome(item.get("time")),
         }
-        counter += 1
 
         category = item.get("category")
         if isinstance(category, str) and category.strip():
-            key = category.strip()
-            if key not in folders:
-                now = chrome_now()
-                folders[key] = {
-                    "children": [],
-                    "date_added": now,
-                    "date_modified": now,
-                    "guid": _guid(),
-                    "id": str(counter),
-                    "name": key,
+            parts = [p for p in category.strip("/").split("/") if p]
+            if not parts:
+                roots.append({
                     "type": "folder",
-                }
-                counter += 1
-                bar.append(folders[key])
-            folders[key]["children"].append(node)
+                    "name": "其他收藏夹",
+                    "children": [node],
+                })
+                continue
+            parent_children = roots
+            chain: tuple[str, ...] = ()
+            for part in parts:
+                chain = chain + (part,)
+                folder = path_map.get(chain)
+                if folder is None:
+                    folder = {"type": "folder", "name": part, "children": []}
+                    parent_children.append(folder)
+                    path_map[chain] = folder
+                parent_children = folder["children"]
+            parent_children.append(node)
         else:
-            other.append(node)
+            roots.append({
+                "type": "folder",
+                "name": "其他收藏夹",
+                "children": [node],
+            })
 
-    return doc
+    return normalize_document(doc) or doc
 
 
 def merge_documents(current: dict, incoming: dict) -> tuple[dict, int]:
     """把导入的标准文档按根合并进现有数据（不覆盖），返回 (doc, 导入条数)。"""
     doc = normalize_document(current) or empty_document()
     count = count_urls(incoming)
-    for key in ROOT_FOLDERS:
-        source = (incoming.get("roots") or {}).get(key)
-        children = source.get("children") if isinstance(source, dict) else None
-        if isinstance(children, list) and children:
-            doc["roots"][key]["children"].extend(copy.deepcopy(children))
+    for root in (incoming.get("roots") or []):
+        if isinstance(root, dict) and root.get("type") == "folder":
+            doc["roots"].append(copy.deepcopy(root))
     return normalize_document(doc) or doc, count
 
 
@@ -277,7 +269,7 @@ def replace_document(incoming: dict) -> tuple[dict, int]:
 def apply_import(current: dict, incoming: dict, mode: str = "merge") -> tuple[dict, int]:
     """按导入模式生成最终文档，返回 (doc, 导入条数)。
 
-    * ``merge``（默认）：把外部导出的收藏按根合并进现有数据，保留已有收藏。
+    * ``merge``（默认）：把外部导出的收藏作为根目录合并进现有数据，保留已有收藏。
     * ``replace``：清空现有数据，只保留导入文件的内容。
 
     任何未知 / 缺失的 mode 都回退到「合并」，避免误删数据。
@@ -314,7 +306,11 @@ def _attr_date(seconds: Any) -> str:
 
 
 def parse_netscape_html(text: str) -> dict[str, Any]:
-    """解析浏览器导出的 Netscape Bookmark HTML -> 标准收藏树。"""
+    """解析浏览器导出的 Netscape Bookmark HTML -> 标准收藏树。
+
+    顶层 ``<H3>`` 文件夹直接成为根目录（保留其自身名称）；顶层散落的网址归入
+    「其他收藏夹」根目录。不再强制映射到固定的三个根。
+    """
     source = str(text or "")
     top: list[dict] = []
     current = top
@@ -349,7 +345,6 @@ def parse_netscape_html(text: str) -> dict[str, Any]:
                 "id": "",
                 "name": _strip_tags(match.group(3)) or "未命名",
                 "type": "folder",
-                "_toolbar": str(attrs.get("PERSONAL_TOOLBAR_FOLDER", "")).lower() == "true",
             }
             current.append(folder)
             pending_folder = folder
@@ -373,41 +368,30 @@ def parse_netscape_html(text: str) -> dict[str, Any]:
             current.append(node)
 
     doc = empty_document()
-    loose_folders: list[dict] = []
     loose_urls: list[dict] = []
-    recognised = False
-
     for node in top:
-        is_toolbar = node.get("type") == "folder" and node.pop("_toolbar", False)
         if node.get("type") != "folder":
             loose_urls.append(node)
             continue
-        name = str(node.get("name", "")).lower()
-        key = None
-        if is_toolbar or name in BAR_NAMES:
-            key = "bookmark_bar"
-        elif name in OTHER_NAMES:
-            key = "other"
-        elif name in SYNCED_NAMES:
-            key = "synced"
+        doc["roots"].append(node)
 
-        if key:
-            recognised = True
-            root = doc["roots"][key]
-            root["children"].extend(node.get("children") or [])
-            root["date_added"] = node["date_added"]
-            root["date_modified"] = node["date_modified"]
-        else:
-            loose_folders.append(node)
-
-    # 老式导出没有标准根文件夹时，顶层文件夹整体归入收藏夹栏
-    doc["roots"]["other" if recognised else "bookmark_bar"]["children"].extend(loose_folders)
-    doc["roots"]["other"]["children"].extend(loose_urls)
+    if loose_urls:
+        now = chrome_now()
+        doc["roots"].append({
+            "children": loose_urls,
+            "date_added": now,
+            "date_modified": now,
+            "guid": _guid(),
+            "id": "",
+            "name": "其他收藏夹",
+            "type": "folder",
+        })
 
     return normalize_document(doc) or doc
 
 
 def _node_lines(children: list[dict], indent: int) -> str:
+    """渲染 children 列表为 HTML 片段（不含外层的 H3 / DL）。"""
     pad = " " * indent
     lines = []
     for node in children or []:
@@ -418,7 +402,7 @@ def _node_lines(children: list[dict], indent: int) -> str:
                 f'{html.escape(str(node.get("name", "")), quote=True)}</H3>'
             )
             lines.append(f"{pad}<DL><p>")
-            lines.append(_node_lines(node.get("children") or [], indent + 4))
+            lines.append(_node_lines(node.get("children") or [], indent + 4).rstrip("\n"))
             lines.append(f"{pad}</DL><p>")
         else:
             icon = node.get("icon")
@@ -431,8 +415,27 @@ def _node_lines(children: list[dict], indent: int) -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+def _root_folder_lines(node: dict, indent: int) -> str:
+    """渲染一个根目录（含自身的 H3 + DL 包裹）。"""
+    pad = " " * indent
+    lines = [
+        f'{pad}<DT><H3 ADD_DATE="{_chrome_to_unix_seconds(node.get("date_added"))}" '
+        f'LAST_MODIFIED="{_chrome_to_unix_seconds(node.get("date_modified"))}">'
+        f'{html.escape(str(node.get("name", "")), quote=True)}</H3>',
+        f"{pad}<DL><p>",
+    ]
+    children = _node_lines(node.get("children") or [], indent + 4)
+    if children:
+        lines.append(children.rstrip("\n"))
+    lines.append(f"{pad}</DL><p>")
+    return "\n".join(lines)
+
+
 def to_netscape_html(doc: dict) -> str:
-    """标准收藏树 -> 浏览器可直接导入的 Netscape Bookmark HTML。"""
+    """标准收藏树 -> 浏览器可直接导入的 Netscape Bookmark HTML。
+
+    每个根目录都作为顶层 ``<H3>`` 输出，不再包裹固定的三个根文件夹。
+    """
     lines = [
         "<!DOCTYPE NETSCAPE-Bookmark-file-1>",
         "<!-- This is an automatically generated file.",
@@ -443,17 +446,8 @@ def to_netscape_html(doc: dict) -> str:
         "<H1>Bookmarks</H1>",
         "<DL><p>",
     ]
-    for key, _meta in ROOT_FOLDERS.items():
-        root = doc["roots"][key]
-        toolbar = ' PERSONAL_TOOLBAR_FOLDER="true"' if key == "bookmark_bar" else ""
-        lines.append(
-            f'    <DT><H3 ADD_DATE="{_chrome_to_unix_seconds(root.get("date_added"))}" '
-            f'LAST_MODIFIED="{_chrome_to_unix_seconds(root.get("date_modified"))}"{toolbar}>'
-            f'{html.escape(str(root.get("name", "")), quote=True)}</H3>'
-        )
-        lines.append("    <DL><p>")
-        lines.append(_node_lines(root.get("children") or [], 8).rstrip("\n"))
-        lines.append("    </DL><p>")
+    for root in (doc.get("roots") or []):
+        lines.append(_root_folder_lines(root, 4).rstrip("\n"))
     lines.append("</DL><p>")
     return "\n".join(lines) + "\n"
 
@@ -468,13 +462,22 @@ def parse_bookmarks_json(text: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError("不是有效的收藏数据")
 
-    if not isinstance(data.get("roots"), dict):
-        if isinstance(data.get("children"), list):
-            doc = empty_document()
-            doc["roots"]["other"]["children"] = data["children"]
-            return normalize_document(doc) or doc
-        raise ValueError("缺少 roots 字段")
-    return normalize_document(data) or empty_document()
+    if "roots" in data:
+        return normalize_document(data) or empty_document()
+    if isinstance(data.get("children"), list):
+        doc = empty_document()
+        now = chrome_now()
+        doc["roots"].append({
+            "children": data["children"],
+            "date_added": now,
+            "date_modified": now,
+            "guid": _guid(),
+            "id": "",
+            "name": "其他收藏夹",
+            "type": "folder",
+        })
+        return normalize_document(doc) or doc
+    raise ValueError("缺少 roots 字段")
 
 
 def to_bookmarks_json(doc: dict) -> str:

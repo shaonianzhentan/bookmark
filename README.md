@@ -19,7 +19,7 @@ Home Assistant 里的「收藏夹」面板。参考 Microsoft Edge 收藏夹管�
 ## 使用
 
 - 顶部：`搜索收藏夹`、`添加收藏夹`、`添加文件夹`、以及 `···` 更多菜单（导入 / 导出 / 排序 / 展开折叠）。
-- 左侧是文件夹树，固定包含「收藏夹栏」「其他收藏夹」「移动设备收藏夹」，可展开折叠。
+- 左侧是文件夹树，**根目录完全由用户自己创建（或从导入产生），不再预置固定的「收藏夹栏 / 其他收藏夹 / 移动设备收藏夹」**，可展开折叠。
 - 条目行尾的 `···` 或右键菜单：打开、复制链接、编辑、移动到…、删除。
 - 拖动任意条目到左侧文件夹或列表中的文件夹即可移动。
 
@@ -35,21 +35,20 @@ Home Assistant 里的「收藏夹」面板。参考 Microsoft Edge 收藏夹管�
 <TITLE>Bookmarks</TITLE>
 <H1>Bookmarks</H1>
 <DL><p>
-    <DT><H3 ADD_DATE="..." LAST_MODIFIED="..." PERSONAL_TOOLBAR_FOLDER="true">收藏夹栏</H3>
+    <DT><H3 ADD_DATE="..." LAST_MODIFIED="...">常用工具</H3>
     <DL><p>
         <DT><A HREF="https://example.com" ADD_DATE="...">示例</A>
     </DL><p>
-    <DT><H3 ...>其他收藏夹</H3><DL><p></DL><p>
-    <DT><H3 ...>移动设备收藏夹</H3><DL><p></DL><p>
+    <DT><H3 ...>新闻</H3><DL><p></DL><p>
 </DL><p>
 ```
 
-Python 读文件时用 `parse_netscape_html` 转成标准收藏树（`roots.bookmark_bar / other / synced`，节点 `type=url|folder`），写文件时用 `to_netscape_html` 序列化回 HTML。这个树只存在于内存和 REST 接口里，前端拿到的就是它。
+顶层 `<H3>` 即根目录，数量不限、名称任意。`parse_netscape_html` 会把每个顶层文件夹转成标准收藏树里的一个根目录（`roots` 是文件夹节点数组，节点 `type=url|folder`）；顶层散落的网址会归入「其他收藏夹」根目录。写文件时用 `to_netscape_html` 把所有根目录序列化回 HTML。这个树只存在于内存和 REST 接口里，前端拿到的就是它。
 
 标准 HTML 没有节点 id / guid 字段，因此每次从文件读入会重新生成 id 与 guid，`ADD_DATE` 的时间精度为秒；这不影响使用（UI 每次都以后端返回的树为准）。
 
 - **导入**：`···` 更多菜单 →「导入收藏夹…」，选择浏览器导出的文件后可选两种导入方式，**默认「合并导入」**：
-  - **合并导入**：把外部浏览器的收藏按根追加到「收藏夹栏 / 其他收藏夹 / 移动设备收藏夹」，HA 里已有的收藏保持不变——适合把外部浏览器导出的收藏汇入 HA。
+  - **合并导入**：把外部浏览器导出的收藏按顶层根目录整体追加（不再强制映射到固定根），HA 里已有的收藏保持不变——适合把外部浏览器导出的收藏汇入 HA。
   - **覆盖导入**：清空现有全部收藏，只保留文件中的内容（界面上会二次确认）。
   支持 Netscape Bookmark HTML（Edge / Chrome / Firefox 导出的 `favorites_*.html`）、Chrome / Edge Bookmarks JSON，以及旧版扁平 JSON 数组（仅导入兼容）。前端只把文件内容原样提交，识别、转换、合并/覆盖、落盘都在 Python 完成。
 - **导出**：由 Python 生成 `favorites_2026_11_9.html`（与落盘文件同样的标准 HTML，浏览器可直接导入）或 `Bookmarks.json`。
