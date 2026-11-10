@@ -610,6 +610,16 @@ const ICONS = {
   download: svg('<path d="M7.2 1.5h1.6v6.8l2.3-2.3 1.1 1.1L8 11.3 3.8 7.1l1.1-1.1 2.3 2.3V1.5ZM2.5 12h11v2.5h-11z"/>'),
 };
 
+// 与浏览器扩展（ha-extension）约定的通信协议：
+// 面板在扩展的 iframe 内时，扩展会把「当前活动标签页」的标题/网址推过来，
+// 用于预填“添加收藏夹”对话框；直接在 HA 中使用时不会触发。
+const EXT_MSG = {
+  HELLO: 'HA_EXT_HELLO',
+  READY: 'HA_EXT_READY',
+  REQUEST: 'HA_EXT_CURRENT_TAB_REQUEST',
+  CURRENT_TAB: 'HA_EXT_CURRENT_TAB',
+};
+
 const DEFAULT_FAVICON = 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">'
   + '<circle cx="8" cy="8" r="6.4" fill="none" stroke="#8a8886" stroke-width="1.2"/>'
@@ -776,6 +786,20 @@ function findNode(id) {
 function activeFolderId() {
   const hit = findNode(state.currentId);
   return hit && hit.node.type === 'folder' ? state.currentId : '1';
+}
+
+/* 收集所有文件夹作为下拉选项（value=id，label=完整路径），并校验 selectedId 存在 */
+function folderOptions(selectedId) {
+  const options = [];
+  walk((node, parent, ancestors) => {
+    if (node.type !== 'folder') return;
+    options.push({ value: node.id, label: (ancestors || []).concat(node).map((item) => item.name).join(' / ') });
+  });
+  if (selectedId) {
+    const exists = options.some((item) => item.value === selectedId);
+    if (!exists && options.length) selectedId = options[0].value;
+  }
+  return { options, selectedId };
 }
 
 function removeNode(id) {
@@ -1048,19 +1072,26 @@ function commit(label) {
 }
 
 function addUrlDialog() {
+  // 默认分类 = 当前所在文件夹（可在对话框里改成其它分类）
+  const activeId = activeFolderId();
+  const { options, selectedId } = folderOptions(activeId);
   openDialog({
     title: '添加收藏夹', confirmText: '添加',
     fields: [
       { name: 'name', label: '名称', placeholder: '例如：Home Assistant' },
       { name: 'url', label: '网址', placeholder: 'https://' },
+      { name: 'category', label: '分类', type: 'select', value: selectedId, options },
     ],
     onOk: (values) => {
       let url = String(values.url || '').trim();
       if (!url) { toast('请输入网址', true); return; }
       if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
+      const targetId = values.category || activeId;
       const node = { id: nextId(), name: String(values.name || '').trim() || url, type: 'url', url, date_added: Date.now() };
-      findNode(activeFolderId()).node.children.push(node);
-      commit('POST /api/bookmark  ← 新增收藏「' + node.name + '」');
+      findNode(targetId).node.children.push(node);
+      state.currentId = targetId;
+      state.expanded.add(targetId);
+      commit('POST /api/bookmark  ← 新增收藏「' + node.name + '」→ ' + targetId);
       toast('已添加收藏夹');
     },
   });
@@ -1111,14 +1142,10 @@ function renameDialog(id) {
 function moveDialog(id) {
   const found = findNode(id);
   if (!found) return;
-  const options = [];
-  walk((node, parent, ancestors) => {
-    if (node.type !== 'folder') return;
-    options.push({ value: node.id, label: (ancestors || []).concat(node).map((item) => item.name).join(' / ') });
-  });
+  const { options, selectedId } = folderOptions(found.parent ? found.parent.id : '1');
   openDialog({
     title: '移动到', confirmText: '移动',
-    fields: [{ name: 'parent', label: '目标文件夹', type: 'select', value: found.parent ? found.parent.id : '1', options }],
+    fields: [{ name: 'parent', label: '目标文件夹', type: 'select', value: selectedId, options }],
     onOk: (values) => {
       if (moveNode(id, values.parent)) {
         commit('POST /api/bookmark  ← 移动节点 ' + id + ' → ' + values.parent);
@@ -1362,8 +1389,8 @@ const STEPS = [
   },
   {
     title: '添加收藏夹 / 添加文件夹',
-    desc: '顶栏两个按钮分别打开对话框，新内容会加入「当前打开的文件夹」。',
-    points: ['添加收藏夹：名称 + 网址；网址未写协议会自动补 https://', '添加文件夹：只填名称，新建后自动展开', '点「添加」即触发 POST /api/bookmark 保存整份树'],
+    desc: '顶栏两个按钮分别打开对话框，新内容默认加入「当前打开的文件夹」。',
+    points: ['添加收藏夹：名称 + 网址 + 分类；分类下拉默认选中当前文件夹，可改成任意其它分类', '网址未写协议会自动补 https://；添加后自动跳到所选分类便于确认落点', '添加文件夹：只填名称，新建后自动展开', '点「添加」即触发 POST /api/bookmark 保存整份树'],
     run: () => { resetView(); addUrlDialog(); },
   },
   {

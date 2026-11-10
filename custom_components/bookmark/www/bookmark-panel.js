@@ -42,6 +42,16 @@ const ICONS = {
   download: svg('<path d="M7.2 1.5h1.6v6.8l2.3-2.3 1.1 1.1L8 11.3 3.8 7.1l1.1-1.1 2.3 2.3V1.5ZM2.5 12h11v2.5h-11z"/>'),
 };
 
+// 与浏览器扩展（ha-extension）约定的通信协议：
+// 面板在扩展的 iframe 内时，扩展会把「当前活动标签页」的标题/网址推过来，
+// 用于预填“添加收藏夹”对话框；直接在 HA 中使用时不会触发。
+const EXT_MSG = {
+  HELLO: 'HA_EXT_HELLO',
+  READY: 'HA_EXT_READY',
+  REQUEST: 'HA_EXT_CURRENT_TAB_REQUEST',
+  CURRENT_TAB: 'HA_EXT_CURRENT_TAB',
+};
+
 const DEFAULT_FAVICON = 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">'
   + '<circle cx="8" cy="8" r="6.4" fill="none" stroke="#8a8886" stroke-width="1.2"/>'
@@ -110,6 +120,7 @@ class BookmarkPanel extends HTMLElement {
     this._dialog = null;
     this._hass = null;
     this._toastTimer = null;
+    this._extTabInfo = null;
 
     this._docClick = (ev) => {
       if (ev.composedPath && ev.composedPath().includes(this)) return;
@@ -143,10 +154,32 @@ class BookmarkPanel extends HTMLElement {
 
   connectedCallback() {
     document.addEventListener('click', this._docClick);
+    // 与浏览器扩展通信：仅在确实嵌在父窗口（iframe）中时启用，
+    // 直接嵌在 HA 里时 window.parent === window，下面整段不触发。
+    if (window.parent && window.parent !== window) {
+      if (!this._onExtMessage) {
+        this._onExtMessage = (event) => {
+          if (event.source !== window.parent) return; // 只认直接父窗口
+          const data = event.data || {};
+          if (data.type === EXT_MSG.HELLO) {
+            window.parent.postMessage({ type: EXT_MSG.READY }, '*');
+          } else if (data.type === EXT_MSG.CURRENT_TAB && data.payload) {
+            this._extTabInfo = {
+              title: String(data.payload.title || '').trim(),
+              url: String(data.payload.url || '').trim(),
+            };
+            this._fillTabInfoIntoAddDialog();
+          }
+        };
+      }
+      window.addEventListener('message', this._onExtMessage);
+      window.parent.postMessage({ type: EXT_MSG.READY }, '*'); // 触发扩展推送一次当前标签页
+    }
   }
 
   disconnectedCallback() {
     document.removeEventListener('click', this._docClick);
+    if (this._onExtMessage) window.removeEventListener('message', this._onExtMessage);
   }
 
   $(selector) {
@@ -454,13 +487,52 @@ class BookmarkPanel extends HTMLElement {
     if (options && options.onOk) options.onOk(values);
   }
 
+  // 若当前正开着“添加收藏夹”对话框，把扩展回传的标签页信息填进名称/网址；
+  // 仅当字段尚为空时才填，避免覆盖用户已输入的内容。
+  _fillTabInfoIntoAddDialog() {
+    const info = this._extTabInfo;
+    if (!info) return;
+    const layer = this.$('#dialogLayer');
+    if (!layer || !layer.classList.contains('show')) return;
+    if (!this._dialog || this._dialog.title !== '添加收藏夹') return;
+    const nameEl = layer.querySelector('[data-field="name"]');
+    const urlEl = layer.querySelector('[data-field="url"]');
+    if (nameEl && !nameEl.value) nameEl.value = info.title || '';
+    if (urlEl && !urlEl.value) urlEl.value = info.url || '';
+  }
+
+  /** 收集所有文件夹作为下拉选项（value=id，label=完整路径） */
+  _folderOptions(selectedId) {
+    const options = [];
+    walkNodes(this.doc, (node, parent, ancestors) => {
+      if (node.type !== 'folder') return;
+      options.push({
+        value: node.id,
+        label: ancestors.concat(node).map((item) => item.name).join(' / '),
+      });
+    });
+    if (selectedId) {
+      const exists = options.some((item) => item.value === selectedId);
+      if (!exists && options.length) selectedId = options[0].value;
+    }
+    return { options, selectedId };
+  }
+
   _addUrlDialog() {
+    const ext = this._extTabInfo || {};
+    // 默认分类 = 当前所在文件夹（可在对话框里改成其它分类）
+    const activeId = this._activeFolderId();
+    const { options, selectedId } = this._folderOptions(activeId);
     this._openDialog({
       title: '添加收藏夹',
       confirmText: '添加',
       fields: [
-        { name: 'name', label: '名称', placeholder: '例如：Home Assistant' },
-        { name: 'url', label: '网址', placeholder: 'https://' },
+        { name: 'name', label: '名称', placeholder: '例如：Home Assistant', value: ext.title || '' },
+        { name: 'url', label: '网址', placeholder: 'https://', value: ext.url || '' },
+        {
+          name: 'category', label: '分类', type: 'select',
+          value: selectedId, options,
+        },
       ],
       onOk: async (values) => {
         let url = String(values.url || '').trim();
@@ -469,15 +541,22 @@ class BookmarkPanel extends HTMLElement {
           return;
         }
         if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
-        addNode(this.doc, this._activeFolderId(), {
+        addNode(this.doc, values.category || activeId, {
           name: String(values.name || '').trim() || url,
           type: 'url',
           url,
         });
+        // 添加后跳到所选分类，便于确认落点
+        this.currentId = values.category || activeId;
+        this.expanded.add(this.currentId);
         await this._commit();
         this._toast('已添加收藏夹');
       },
     });
+    // 在扩展内时，点击即向扩展请求“当前”活动标签页，覆盖为最新页面
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: EXT_MSG.REQUEST }, '*');
+    }
   }
 
   _addFolderDialog() {
@@ -536,20 +615,13 @@ class BookmarkPanel extends HTMLElement {
   _moveDialog(id) {
     const found = findNode(this.doc, id);
     if (!found) return;
-    const options = [];
-    walkNodes(this.doc, (node, parent, ancestors) => {
-      if (node.type !== 'folder') return;
-      options.push({
-        value: node.id,
-        label: ancestors.concat(node).map((item) => item.name).join(' / '),
-      });
-    });
+    const { options, selectedId } = this._folderOptions(found.parent ? found.parent.id : '1');
     this._openDialog({
       title: '移动到',
       confirmText: '移动',
       fields: [{
         name: 'parent', label: '目标文件夹', type: 'select',
-        value: found.parent ? found.parent.id : '1', options,
+        value: selectedId, options,
       }],
       onOk: async (values) => {
         if (moveNode(this.doc, id, values.parent)) {
