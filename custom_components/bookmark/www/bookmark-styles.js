@@ -60,10 +60,15 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: 60px;
-  padding: 10px 20px;
-  background: var(--bm-surface);
-  border-bottom: 1px solid var(--bm-line);
+  /* 与 HA 顶栏 / 侧边栏头部同高（--header-height 由 HA 注入，含安全区外的高度），
+     box-sizing 让那 1px 分隔线计入高度，确保和 HA 的下划线精确对齐 */
+  height: var(--header-height, 56px);
+  box-sizing: border-box;
+  padding: 0 16px;
+  /* 与 HA 自带 app-header 同底色 / 前景色，读起来像 HA 的二级工具栏 */
+  background: var(--app-header-background-color, var(--bm-surface));
+  color: var(--app-header-text-color, var(--bm-text));
+  border-bottom: 1px solid var(--divider-color, var(--bm-line));
   flex: none;
 }
 /* 面板顶栏只是工具栏：标题与 HA 侧边栏入口由 HA 自带的 app bar 提供 */
@@ -122,6 +127,37 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 }
 .bm-icon-btn:hover { background: var(--bm-hover); }
 .bm-icon-btn svg { width: 17px; height: 17px; }
+
+/* 顶栏与 HA app-header 融合：控件用中性叠加色，任何 header 底色（浅/深/彩色）都能读 */
+.bm-topbar .bm-btn {
+  background: transparent;
+  border-color: var(--divider-color, var(--bm-line));
+  color: inherit;
+}
+.bm-topbar .bm-btn:hover { background: rgba(127, 127, 127, .16); }
+.bm-topbar .bm-btn-primary {
+  background: rgba(127, 127, 127, .16);
+  border-color: transparent;
+  color: inherit;
+  font-weight: 600;
+}
+.bm-topbar .bm-btn-primary:hover { background: rgba(127, 127, 127, .24); }
+.bm-topbar .bm-icon-btn { color: inherit; }
+.bm-topbar .bm-icon-btn:hover { background: rgba(127, 127, 127, .16); }
+.bm-topbar .bm-brand .bm-folder-toggle { color: inherit; }
+.bm-topbar .bm-search {
+  background: rgba(127, 127, 127, .14);
+  border-color: transparent;
+  color: inherit;
+}
+.bm-topbar .bm-search:focus-within {
+  border-color: var(--primary-color, var(--bm-accent));
+  box-shadow: 0 0 0 1px var(--primary-color, var(--bm-accent));
+}
+.bm-topbar .bm-search > svg { color: inherit; opacity: .7; }
+.bm-topbar .bm-search-input { color: inherit; }
+.bm-topbar .bm-search-input::placeholder { color: inherit; opacity: .6; }
+.bm-topbar .bm-search-clear { color: inherit; opacity: .7; }
 
 /* ------------------------------------------------------------ 主体布局 */
 .bm-body { display: flex; flex: 1; min-height: 0; }
