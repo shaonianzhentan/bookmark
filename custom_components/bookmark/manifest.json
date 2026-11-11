@@ -4,6 +4,7 @@
   "version": "2026.11.11",
   "config_flow": true,
   "documentation": "https://github.com/shaonianzhentan/bookmark",
+  "issue_tracker": "https://github.com/shaonianzhentan/bookmark/issues",
   "dependencies": [],
   "codeowners": [
     "@shaonianzhentan"
