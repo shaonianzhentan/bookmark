@@ -252,10 +252,20 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 360px;
+  /* 父容器有确定高度（HA 面板 / 预览舞台）时精确铺满；父容器高度不确定时
+     （页面整体滚动的 iframe / popup），百分比 min/max-height 退化为 none，
+     由视口高度兜底。两种情况下 .bm-app 都有确定高度，因此顶栏固定、
+     左右两栏各自内部滚动，不会变成整页滚动。 */
+  height: 100vh;
+  height: 100dvh;
+  min-height: max(360px, 100%);
+  max-height: 100%;
   background: var(--bm-bg);
   overflow: hidden;
+}
+/* clip 不建立滚动容器：外层真发生滚动时顶栏的 sticky 才会生效 */
+@supports (overflow: clip) {
+  .bm-app { overflow: clip; }
 }
 
 /* ------------------------------------------------------------ 顶部工具栏 */
@@ -273,6 +283,10 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
   color: var(--app-header-text-color, var(--bm-text));
   border-bottom: 1px solid var(--divider-color, var(--bm-line));
   flex: none;
+  /* 列表/树内部滚动时顶栏本就不动；外层偶尔滚动时也钉在顶部 */
+  position: sticky;
+  top: 0;
+  z-index: 15;
 }
 /* 面板顶栏只是工具栏：标题与 HA 侧边栏入口由 HA 自带的 app bar 提供 */
 .bm-brand { display: flex; align-items: center; flex: none; }
@@ -366,7 +380,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-body { display: flex; flex: 1; min-height: 0; }
 .bm-sidebar {
   display: flex; flex-direction: column;
-  width: 272px; flex: none;
+  width: 272px; flex: none; min-height: 0;
   background: var(--bm-sidebar);
   border-right: 1px solid var(--bm-line);
   transition: width .16s;
@@ -380,11 +394,12 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 }
 .bm-link { border: 0; background: transparent; color: var(--bm-accent); font-size: 12px; padding: 2px 4px; }
 .bm-link:hover { text-decoration: underline; }
-.bm-tree { flex: 1; overflow: auto; padding: 2px 8px 16px; }
+.bm-tree { flex: 1; min-height: 0; overflow: auto; padding: 2px 8px 16px; }
 .bm-sidebar-foot {
   flex: none; padding: 12px 16px; border-top: 1px solid var(--bm-line);
   color: var(--bm-sub); font-size: 11.5px; line-height: 1.5;
 }
+.bm-hint-touch { display: none; }
 
 .bm-tree-row {
   display: flex; align-items: center; gap: 6px;
@@ -409,7 +424,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-tree-label { overflow: hidden; text-overflow: ellipsis; flex: 1; }
 .bm-tree-count { color: var(--bm-sub); font-size: 11px; font-weight: 400; }
 
-.bm-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.bm-main { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .bm-crumbs {
   display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
   min-height: 42px; padding: 8px 24px 0; flex: none;
@@ -549,7 +564,13 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-toast.error { background: var(--bm-danger); }
 
 /* ------------------------------------------------------------ 响应式 */
-.bm-host.narrow .bm-sidebar { position: absolute; top: 60px; bottom: 0; left: 0; z-index: 10; width: min(272px, 84vw); box-shadow: var(--bm-shadow); }
+/* 触屏没有 hover，行尾的 ··· 必须常显；侧栏提示也换成触屏可用的操作路径 */
+@media (hover: none) {
+  .bm-row-more { opacity: 1; width: 32px; height: 32px; }
+  .bm-hint-desktop { display: none; }
+  .bm-hint-touch { display: inline; }
+}
+.bm-host.narrow .bm-sidebar { position: absolute; top: var(--header-height, 56px); bottom: 0; left: 0; z-index: 10; width: min(272px, 84vw); box-shadow: var(--bm-shadow); }
 .bm-host.narrow .bm-app.sidebar-collapsed .bm-sidebar { width: 0; border-right: 0; box-shadow: none; }
 .bm-host.narrow .bm-topbar { padding: 10px 12px; gap: 10px; }
 .bm-host.narrow .bm-btn span.bm-btn-label { display: none; }
@@ -557,6 +578,9 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-host.narrow .bm-list { margin: 0 12px 12px; }
 .bm-host.narrow .bm-list-head, .bm-host.narrow .bm-crumbs { padding-left: 12px; padding-right: 12px; }
 .bm-host.narrow .bm-menu { max-width: calc(100vw - 24px); }
+.bm-host.narrow .bm-row-more { opacity: 1; width: 32px; height: 32px; }
+.bm-host.narrow .bm-hint-desktop { display: none; }
+.bm-host.narrow .bm-hint-touch { display: inline; }
 /*__PANEL_STYLES_END__*/
 </style>
 </head>
@@ -687,7 +711,10 @@ const TEMPLATE = `
     <aside class="bm-sidebar">
       <div class="bm-sidebar-head"><span>文件夹</span><button class="bm-link" data-act="collapse-all">全部折叠</button></div>
       <div class="bm-tree" id="tree"></div>
-      <div class="bm-sidebar-foot">拖动条目到文件夹即可移动；右键查看更多操作。</div>
+      <div class="bm-sidebar-foot">
+        <span class="bm-hint-desktop">拖动条目到文件夹即可移动；点行尾 ··· 查看更多操作。</span>
+        <span class="bm-hint-touch">点行尾 ··· 可编辑、用「移动到…」调整分类或删除。</span>
+      </div>
     </aside>
 
     <main class="bm-main">
@@ -1132,24 +1159,36 @@ function addUrlDialog() {
 }
 
 function addFolderDialog() {
+  const activeId = activeFolderId();
+  const { options, selectedId } = folderOptions(activeId);
+  // 空分类 = 创建为顶层根目录；还没有任何文件夹时下拉里只有这一项
+  options.unshift({ value: '', label: '（顶层根目录）' });
   openDialog({
     title: '添加文件夹', confirmText: '添加',
-    fields: [{ name: 'name', label: '文件夹名称', placeholder: '新文件夹' }],
+    hint: '分类留空时，会在根目录下新建一个顶层文件夹',
+    fields: [
+      { name: 'name', label: '文件夹名称', placeholder: '新文件夹' },
+      { name: 'category', label: '分类', type: 'select', value: selectedId || '', options },
+    ],
     onOk: (values) => {
       const name = String(values.name || '').trim();
       if (!name) { toast('请输入文件夹名称', true); return; }
       const node = { id: nextId(), name, type: 'folder', children: [], date_added: Date.now() };
-      const parentId = activeFolderId();
-      if (parentId) {
-        findNode(parentId).node.children.push(node);
-        state.expanded.add(parentId);
-      } else {
+      const parentId = values.category || '';
+      const target = parentId ? findNode(parentId) : null;
+      const asRoot = !target || target.node.type !== 'folder';
+      if (asRoot) {
         state.doc.roots.push(node);
+      } else {
+        target.node.children.push(node);
+        state.expanded.add(parentId);
       }
-      state.currentId = node.id;
+      // 停留在所选分类，便于确认新文件夹的落点
+      state.currentId = asRoot ? node.id : parentId;
+      state.expanded.add(state.currentId);
       state.expanded.add(node.id);
       commit('POST /api/bookmark  ← 新增文件夹「' + name + '」');
-      toast(parentId ? '已添加文件夹' : '已创建根目录');
+      toast(asRoot ? '已创建根目录' : '已添加文件夹');
     },
   });
 }
@@ -1406,7 +1445,7 @@ const STEPS = [
     desc: '这是 HA 自定义面板 <bookmark-panel> 的完整外观：顶栏工具栏（文件夹 / 搜索 / 添加 / 更多）、左侧文件夹树、右侧当前文件夹内容。',
     points: [
       '左侧固定三个根：收藏夹栏 / 其他收藏夹 / 移动设备收藏夹（Chrome/Edge 标准格式，不含预置网址）',
-      '右侧先列文件夹、再列收藏网址，面包屑可逐级返回；行右侧悬停出现 … 按钮',
+      '顶栏固定，左侧文件夹树铺满高度并独立滚动，只有列表区域滚动；行右侧 … 按钮在触屏常显',
       '改动后前端把整份树 POST /api/bookmark，由 Python 序列化并落盘',
     ],
     run: () => { resetAll(); flash('.bm-body'); },
@@ -1429,14 +1468,14 @@ const STEPS = [
   },
   {
     title: '添加收藏夹 / 添加文件夹',
-    desc: '顶栏两个按钮分别打开对话框，新内容默认加入「当前打开的文件夹」。',
-    points: ['添加收藏夹：名称 + 网址 + 分类；分类下拉默认选中当前文件夹，可改成任意其它分类', '网址未写协议会自动补 https://；添加后自动跳到所选分类便于确认落点', '添加文件夹：只填名称，新建后自动展开', '点「添加」即触发 POST /api/bookmark 保存整份树'],
+    desc: '顶栏两个按钮分别打开对话框，都能在「分类」下拉里指定落点，默认是当前打开的文件夹。',
+    points: ['添加收藏夹：名称 + 网址 + 分类；分类下拉默认选中当前文件夹，可改成任意其它分类', '网址未写协议会自动补 https://；添加后自动跳到所选分类便于确认落点', '添加文件夹：名称 + 分类；选「（顶层根目录）」或还没有任何文件夹时，直接创建为顶层根目录', '点「添加」即触发 POST /api/bookmark 保存整份树'],
     run: () => { resetView(); addUrlDialog(); },
   },
   {
-    title: '行菜单 / 右键菜单',
-    desc: '鼠标移到列表行会出现 … 按钮，也可直接右键该行，弹出上下文菜单。',
-    points: ['网址：在新标签页打开、复制链接、编辑、移动到…、删除', '文件夹：打开文件夹、重命名、移动到…、删除'],
+    title: '行菜单（桌面可右键）',
+    desc: '点击列表行右侧的 … 按钮弹出上下文菜单；桌面端也可右键该行呼出同一菜单，移动端没有右键，请用常显的 … 按钮。',
+    points: ['网址：在新标签页打开、复制链接、编辑、移动到…、删除', '文件夹：打开文件夹、重命名、移动到…、删除', '移动端没有拖放，移动请用菜单里的「移动到…」'],
     run: () => {
       resetView();
       const row = $('#list .bm-row[data-act="open-url"]');
@@ -1451,8 +1490,8 @@ const STEPS = [
   },
   {
     title: '移动到…',
-    desc: '下拉里列出所有文件夹的完整路径，选好目标后移动；也可以直接把行拖到左侧树的文件夹上。',
-    points: ['不允许把文件夹移进自己或自己的子文件夹', '拖放时目标文件夹会有蓝色描边提示'],
+    desc: '下拉里列出所有文件夹的完整路径，选好目标后移动；桌面端也可以直接把行拖到左侧树的文件夹上。',
+    points: ['不允许把文件夹移进自己或自己的子文件夹', '桌面端拖放时目标文件夹会有蓝色描边提示；移动端请用「移动到…」'],
     run: () => { resetView(); moveDialog(firstUrlId()); },
   },
   {

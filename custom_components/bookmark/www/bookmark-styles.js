@@ -49,10 +49,20 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 360px;
+  /* 父容器有确定高度（HA 面板 / 预览舞台）时精确铺满；父容器高度不确定时
+     （页面整体滚动的 iframe / popup），百分比 min/max-height 退化为 none，
+     由视口高度兜底。两种情况下 .bm-app 都有确定高度，因此顶栏固定、
+     左右两栏各自内部滚动，不会变成整页滚动。 */
+  height: 100vh;
+  height: 100dvh;
+  min-height: max(360px, 100%);
+  max-height: 100%;
   background: var(--bm-bg);
   overflow: hidden;
+}
+/* clip 不建立滚动容器：外层真发生滚动时顶栏的 sticky 才会生效 */
+@supports (overflow: clip) {
+  .bm-app { overflow: clip; }
 }
 
 /* ------------------------------------------------------------ 顶部工具栏 */
@@ -70,6 +80,10 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
   color: var(--app-header-text-color, var(--bm-text));
   border-bottom: 1px solid var(--divider-color, var(--bm-line));
   flex: none;
+  /* 列表/树内部滚动时顶栏本就不动；外层偶尔滚动时也钉在顶部 */
+  position: sticky;
+  top: 0;
+  z-index: 15;
 }
 /* 面板顶栏只是工具栏：标题与 HA 侧边栏入口由 HA 自带的 app bar 提供 */
 .bm-brand { display: flex; align-items: center; flex: none; }
@@ -163,7 +177,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-body { display: flex; flex: 1; min-height: 0; }
 .bm-sidebar {
   display: flex; flex-direction: column;
-  width: 272px; flex: none;
+  width: 272px; flex: none; min-height: 0;
   background: var(--bm-sidebar);
   border-right: 1px solid var(--bm-line);
   transition: width .16s;
@@ -177,11 +191,12 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 }
 .bm-link { border: 0; background: transparent; color: var(--bm-accent); font-size: 12px; padding: 2px 4px; }
 .bm-link:hover { text-decoration: underline; }
-.bm-tree { flex: 1; overflow: auto; padding: 2px 8px 16px; }
+.bm-tree { flex: 1; min-height: 0; overflow: auto; padding: 2px 8px 16px; }
 .bm-sidebar-foot {
   flex: none; padding: 12px 16px; border-top: 1px solid var(--bm-line);
   color: var(--bm-sub); font-size: 11.5px; line-height: 1.5;
 }
+.bm-hint-touch { display: none; }
 
 .bm-tree-row {
   display: flex; align-items: center; gap: 6px;
@@ -206,7 +221,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-tree-label { overflow: hidden; text-overflow: ellipsis; flex: 1; }
 .bm-tree-count { color: var(--bm-sub); font-size: 11px; font-weight: 400; }
 
-.bm-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.bm-main { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .bm-crumbs {
   display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
   min-height: 42px; padding: 8px 24px 0; flex: none;
@@ -346,7 +361,13 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-toast.error { background: var(--bm-danger); }
 
 /* ------------------------------------------------------------ 响应式 */
-:host(.narrow) .bm-sidebar { position: absolute; top: 60px; bottom: 0; left: 0; z-index: 10; width: min(272px, 84vw); box-shadow: var(--bm-shadow); }
+/* 触屏没有 hover，行尾的 ··· 必须常显；侧栏提示也换成触屏可用的操作路径 */
+@media (hover: none) {
+  .bm-row-more { opacity: 1; width: 32px; height: 32px; }
+  .bm-hint-desktop { display: none; }
+  .bm-hint-touch { display: inline; }
+}
+:host(.narrow) .bm-sidebar { position: absolute; top: var(--header-height, 56px); bottom: 0; left: 0; z-index: 10; width: min(272px, 84vw); box-shadow: var(--bm-shadow); }
 :host(.narrow) .bm-app.sidebar-collapsed .bm-sidebar { width: 0; border-right: 0; box-shadow: none; }
 :host(.narrow) .bm-topbar { padding: 10px 12px; gap: 10px; }
 :host(.narrow) .bm-btn span.bm-btn-label { display: none; }
@@ -354,4 +375,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 :host(.narrow) .bm-list { margin: 0 12px 12px; }
 :host(.narrow) .bm-list-head, :host(.narrow) .bm-crumbs { padding-left: 12px; padding-right: 12px; }
 :host(.narrow) .bm-menu { max-width: calc(100vw - 24px); }
+:host(.narrow) .bm-row-more { opacity: 1; width: 32px; height: 32px; }
+:host(.narrow) .bm-hint-desktop { display: none; }
+:host(.narrow) .bm-hint-touch { display: inline; }
 `;

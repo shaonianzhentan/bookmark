@@ -83,7 +83,10 @@ const TEMPLATE = `
     <aside class="bm-sidebar">
       <div class="bm-sidebar-head"><span>文件夹</span><button class="bm-link" data-act="collapse-all">全部折叠</button></div>
       <div class="bm-tree" id="tree"></div>
-      <div class="bm-sidebar-foot">拖动条目到文件夹即可移动；右键查看更多操作。</div>
+      <div class="bm-sidebar-foot">
+        <span class="bm-hint-desktop">拖动条目到文件夹即可移动；点行尾 ··· 查看更多操作。</span>
+        <span class="bm-hint-touch">点行尾 ··· 可编辑、用「移动到…」调整分类或删除。</span>
+      </div>
     </aside>
 
     <main class="bm-main">
@@ -588,28 +591,40 @@ class BookmarkPanel extends HTMLElement {
   }
 
   _addFolderDialog() {
+    const activeId = this._activeFolderId();
+    const { options, selectedId } = this._folderOptions(activeId);
+    // 空分类 = 创建为顶层根目录；还没有任何文件夹时下拉里只有这一项
+    options.unshift({ value: '', label: '（顶层根目录）' });
     this._openDialog({
       title: '添加文件夹',
       confirmText: '添加',
-      fields: [{ name: 'name', label: '文件夹名称', placeholder: '新文件夹' }],
+      hint: '分类留空时，会在根目录下新建一个顶层文件夹',
+      fields: [
+        { name: 'name', label: '文件夹名称', placeholder: '新文件夹' },
+        {
+          name: 'category', label: '分类', type: 'select',
+          value: selectedId || '', options,
+        },
+      ],
       onOk: async (values) => {
         const name = String(values.name || '').trim();
         if (!name) {
           this._toast('请输入文件夹名称', true);
           return;
         }
-        const parentId = this._activeFolderId();
-        // 未选中任何文件夹时，作为顶层根目录创建；否则建为当前文件夹的子文件夹
-        let node;
-        let asRoot = false;
-        if (!parentId) {
-          node = addRoot(this.doc, { name, type: 'folder' });
-          asRoot = true;
-          if (node) this.currentId = node.id;
-        } else {
-          node = addNode(this.doc, parentId, { name, type: 'folder' });
+        const parentId = values.category || '';
+        let node = parentId ? addNode(this.doc, parentId, { name, type: 'folder' }) : null;
+        // 分类为空（或目标分类已不存在）时，直接创建为顶层根目录
+        const asRoot = !node;
+        if (asRoot) node = addRoot(this.doc, { name, type: 'folder' });
+        if (!node) {
+          this._toast('添加文件夹失败', true);
+          return;
         }
-        if (node) this.expanded.add(node.id);
+        // 停留在所选分类，便于确认新文件夹的落点
+        this.currentId = asRoot ? node.id : parentId;
+        this.expanded.add(this.currentId);
+        this.expanded.add(node.id);
         await this._commit();
         this._toast(asRoot ? '已创建根目录' : '已添加文件夹');
       },
