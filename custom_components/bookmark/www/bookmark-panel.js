@@ -4,6 +4,8 @@
  * 由 panel_custom 的 module_url 以 ES 模块方式加载；
  * 元素标签为 bookmark-panel，HA 会把 hass / narrow / route / panel 赋到实例上。
  * 数据读写走 /api/bookmark，标准收藏数据的转换全部由 Python 侧 convert.py 完成。
+ *
+ * 文案国际化为前端本地实现（zh / en），语言取自 hass.language（回退到浏览器语言）。
  */
 import { STYLES } from './bookmark-styles.js';
 import {
@@ -61,61 +63,218 @@ const DEFAULT_FAVICON = 'data:image/svg+xml,' + encodeURIComponent(
   + '</svg>'
 );
 
-const TEMPLATE = `
-<div class="bm-app">
-  <header class="bm-topbar">
-    <button class="bm-icon-btn bm-ha-menu" data-act="ha-menu" title="显示/隐藏 Home Assistant 侧边栏">${ICONS.ha}</button>
-    <div class="bm-brand">
-      <button class="bm-btn bm-folder-toggle" data-act="toggle-sidebar" title="显示/隐藏文件夹列表">${ICONS.folder}<span class="bm-btn-label">文件夹</span></button>
-    </div>
-    <div class="bm-search">
-      ${ICONS.search}
-      <input class="bm-search-input" type="search" placeholder="搜索收藏" autocomplete="off" spellcheck="false" />
-      <button class="bm-search-clear" data-act="clear-search" title="清除搜索" hidden>&times;</button>
-    </div>
-    <div class="bm-actions">
-      <button class="bm-btn" data-act="add-url" title="添加收藏">${ICONS.star}<span class="bm-btn-label">添加收藏</span></button>
-      <button class="bm-btn" data-act="add-folder" title="添加文件夹">${ICONS.folderPlus}<span class="bm-btn-label">添加文件夹</span></button>
-      <button class="bm-icon-btn" data-act="more" title="更多选项">${ICONS.more}</button>
-    </div>
-  </header>
-
-  <div class="bm-body">
-    <aside class="bm-sidebar">
-      <div class="bm-sidebar-head"><span>文件夹</span><button class="bm-link" data-act="collapse-all">全部折叠</button></div>
-      <div class="bm-tree" id="tree"></div>
-      <div class="bm-sidebar-foot">
-        <span class="bm-hint-desktop">拖动条目到文件夹即可移动；点行尾 ··· 查看更多操作。</span>
-        <span class="bm-hint-touch">点行尾 ··· 可编辑、用「移动到…」调整分类或删除。</span>
-      </div>
-    </aside>
-
-    <main class="bm-main">
-      <div class="bm-crumbs" id="crumbs"></div>
-      <div class="bm-list-head">
-        <div class="bm-list-title"><h2 id="folderTitle"></h2><span id="folderCount"></span></div>
-        <div class="bm-list-tools">
-          <button class="bm-icon-btn" data-act="sort" title="排序方式">${ICONS.sort}</button>
-          <button class="bm-icon-btn" data-act="more" title="更多选项">${ICONS.more}</button>
-        </div>
-      </div>
-      <div class="bm-list" id="list"></div>
-    </main>
-  </div>
-
-  <div class="bm-drawer-scrim" data-act="close-sidebar"></div>
-
-  <div class="bm-menu-layer" id="menuLayer"></div>
-  <div class="bm-dialog-layer" id="dialogLayer"></div>
-  <div class="bm-toast" id="toast"></div>
-</div>
-`;
+// 文案国际化简表：zh 为中文、en 为英文。键值对保持一致即可新增语言。
+const I18N = {
+  zh: {
+    showHideSidebar: '显示/隐藏 Home Assistant 侧边栏',
+    showHideFolders: '显示/隐藏文件夹列表',
+    folders: '文件夹',
+    searchPlaceholder: '搜索收藏',
+    clearSearch: '清除搜索',
+    addBookmark: '添加收藏',
+    addFolder: '添加文件夹',
+    moreOptions: '更多选项',
+    collapseAllBtn: '全部折叠',
+    hintDesktop: '拖动条目到文件夹即可移动；点行尾 ··· 查看更多操作。',
+    hintTouch: '点行尾 ··· 可编辑、用「移动到…」调整分类或删除。',
+    sortTitle: '排序方式',
+    cannotLoad: '无法加载',
+    retry: '重试',
+    searchResults: '搜索结果',
+    searchResultsTitle: '“{q}” 的搜索结果',
+    items: '{n} 项',
+    emptyNoMatchTitle: '没有找到匹配的收藏',
+    emptyNoMatchHint: '试试其他关键词',
+    webBookmarks: '网页收藏',
+    emptyNoBookmarkTitle: '还没有任何收藏',
+    emptyNoBookmarkHint: '点击上方「添加文件夹」可创建根目录，或从「更多」导入浏览器收藏文件',
+    emptyFolderTitle: '此文件夹为空',
+    emptyFolderHint: '点击上方按钮添加收藏或文件夹，或从浏览器导入收藏文件',
+    folderItemSub: '文件夹 · {n} 项',
+    importMerge: '导入收藏…（默认合并）',
+    exportHtml: '导出收藏 (HTML)',
+    exportJson: '导出标准 JSON',
+    sortCustom: '自定义顺序',
+    sortName: '按名称排序',
+    sortDate: '按添加日期排序',
+    expandAll: '展开所有文件夹',
+    collapseAllMenu: '折叠所有文件夹',
+    openFolder: '打开文件夹',
+    rename: '重命名',
+    moveTo: '移动到…',
+    delete: '删除',
+    openInNewTab: '在新标签页打开',
+    copyLink: '复制链接',
+    edit: '编辑',
+    cancel: '取消',
+    ok: '确定',
+    createRootFirst: '请先创建根目录或文件夹',
+    addBookmarkTitle: '添加收藏',
+    add: '添加',
+    nameLabel: '名称',
+    namePlaceholder: '例如：Home Assistant',
+    urlLabel: '网址',
+    urlPlaceholder: 'https://',
+    categoryLabel: '分类',
+    enterUrl: '请输入网址',
+    addedBookmark: '已添加收藏',
+    addFolderTitle: '添加文件夹',
+    folderNamePlaceholder: '新文件夹',
+    emptyCategoryHint: '分类留空时，会在根目录下新建一个顶层文件夹',
+    enterFolderName: '请输入文件夹名称',
+    addFolderFailed: '添加文件夹失败',
+    createdRoot: '已创建根目录',
+    addedFolder: '已添加文件夹',
+    renameFolderTitle: '重命名文件夹',
+    editBookmarkTitle: '编辑收藏',
+    save: '保存',
+    nameRequired: '名称不能为空',
+    urlRequired: '网址不能为空',
+    saved: '已保存',
+    moveTitle: '移动到',
+    moveLabel: '目标文件夹',
+    moved: '已移动',
+    cannotMove: '无法移动到该位置',
+    deleteFolderTitle: '删除文件夹',
+    deleteBookmarkTitle: '删除收藏',
+    deleteConfirm: '确定要删除“{name}”吗？',
+    deleteFolderExtra: '其中的所有内容也会一并删除。',
+    deleted: '已删除',
+    copiedLink: '已复制链接',
+    exported: '已导出 {type}',
+    exportTypeJson: '标准 JSON',
+    exportTypeHtml: '收藏 HTML',
+    exportFailed: '导出失败：{msg}',
+    importTitle: '导入收藏',
+    import: '导入',
+    importText: '支持 Edge / Chrome / Firefox 导出的收藏 HTML，以及 Chrome / Edge 的 Bookmarks JSON。',
+    importHint: '合并导入：把外部浏览器的收藏按根追加进来，HA 里已有的收藏保持不变。覆盖导入：清空现有全部收藏，只保留文件中的内容。',
+    fileLabel: '收藏文件',
+    importModeLabel: '导入方式',
+    mergeMode: '合并导入（保留现有收藏，默认）',
+    replaceMode: '覆盖导入（清空现有收藏）',
+    topRoot: '（顶层根目录）',
+    moveToRoot: '（移动到根目录）',
+    selectFile: '请选择收藏文件',
+    mergedCount: '已合并导入 {n} 项收藏',
+    replacedCount: '已覆盖导入 {n} 项收藏',
+    confirmReplaceTitle: '确认覆盖导入',
+    confirmReplaceText: '覆盖导入会清空 HA 中现有的全部收藏，只保留所选文件中的内容。此操作不可撤销。',
+    confirmReplace: '确认覆盖',
+    importFailed: '导入失败：{msg}',
+    loadError: '无法加载收藏数据：{msg}',
+    notConnected: '尚未连接 Home Assistant',
+    saveFailed: '保存失败：{msg}',
+  },
+  en: {
+    showHideSidebar: 'Show/hide Home Assistant sidebar',
+    showHideFolders: 'Show/hide folder list',
+    folders: 'Folders',
+    searchPlaceholder: 'Search bookmarks',
+    clearSearch: 'Clear search',
+    addBookmark: 'Add bookmark',
+    addFolder: 'Add folder',
+    moreOptions: 'More options',
+    collapseAllBtn: 'Collapse all',
+    hintDesktop: 'Drag an item onto a folder to move it; tap ··· at the end of a row for more actions.',
+    hintTouch: 'Tap ··· at the end of a row to edit, change category via “Move to…”, or delete.',
+    sortTitle: 'Sort by',
+    cannotLoad: 'Cannot load',
+    retry: 'Retry',
+    searchResults: 'Search results',
+    searchResultsTitle: 'Search results for “{q}”',
+    items: '{n} items',
+    emptyNoMatchTitle: 'No matching bookmarks',
+    emptyNoMatchHint: 'Try a different keyword',
+    webBookmarks: 'Web bookmarks',
+    emptyNoBookmarkTitle: 'No bookmarks yet',
+    emptyNoBookmarkHint: 'Tap “Add folder” above to create a root folder, or import browser bookmarks from “More”.',
+    emptyFolderTitle: 'This folder is empty',
+    emptyFolderHint: 'Add a bookmark or folder using the buttons above, or import browser bookmarks.',
+    folderItemSub: 'Folder · {n} items',
+    importMerge: 'Import bookmarks… (merge by default)',
+    exportHtml: 'Export bookmarks (HTML)',
+    exportJson: 'Export standard JSON',
+    sortCustom: 'Custom order',
+    sortName: 'Sort by name',
+    sortDate: 'Sort by date added',
+    expandAll: 'Expand all folders',
+    collapseAllMenu: 'Collapse all folders',
+    openFolder: 'Open folder',
+    rename: 'Rename',
+    moveTo: 'Move to…',
+    delete: 'Delete',
+    openInNewTab: 'Open in new tab',
+    copyLink: 'Copy link',
+    edit: 'Edit',
+    cancel: 'Cancel',
+    ok: 'OK',
+    createRootFirst: 'Create a root folder or folder first',
+    addBookmarkTitle: 'Add bookmark',
+    add: 'Add',
+    nameLabel: 'Name',
+    namePlaceholder: 'e.g. Home Assistant',
+    urlLabel: 'URL',
+    urlPlaceholder: 'https://',
+    categoryLabel: 'Category',
+    enterUrl: 'Please enter a URL',
+    addedBookmark: 'Bookmark added',
+    addFolderTitle: 'Add folder',
+    folderNamePlaceholder: 'New folder',
+    emptyCategoryHint: 'Leaving category empty creates a top-level folder under root',
+    enterFolderName: 'Please enter a folder name',
+    addFolderFailed: 'Failed to add folder',
+    createdRoot: 'Root folder created',
+    addedFolder: 'Folder added',
+    renameFolderTitle: 'Rename folder',
+    editBookmarkTitle: 'Edit bookmark',
+    save: 'Save',
+    nameRequired: 'Name cannot be empty',
+    urlRequired: 'URL cannot be empty',
+    saved: 'Saved',
+    moveTitle: 'Move to',
+    moveLabel: 'Target folder',
+    moved: 'Moved',
+    cannotMove: 'Cannot move to that location',
+    deleteFolderTitle: 'Delete folder',
+    deleteBookmarkTitle: 'Delete bookmark',
+    deleteConfirm: 'Delete “{name}”?',
+    deleteFolderExtra: 'All contents inside will also be deleted.',
+    deleted: 'Deleted',
+    copiedLink: 'Link copied',
+    exported: 'Exported {type}',
+    exportTypeJson: 'standard JSON',
+    exportTypeHtml: 'bookmarks HTML',
+    exportFailed: 'Export failed: {msg}',
+    importTitle: 'Import bookmarks',
+    import: 'Import',
+    importText: 'Supports bookmark HTML exported by Edge / Chrome / Firefox, as well as Chrome / Edge Bookmarks JSON.',
+    importHint: 'Merge import: appends external bookmarks by root while keeping existing ones. Replace import: clears all current bookmarks and keeps only the file’s contents.',
+    fileLabel: 'Bookmark file',
+    importModeLabel: 'Import mode',
+    mergeMode: 'Merge import (keep existing, default)',
+    replaceMode: 'Replace import (clear existing)',
+    topRoot: '(Top-level root)',
+    moveToRoot: '(Move to root)',
+    selectFile: 'Please select a bookmark file',
+    mergedCount: 'Merged {n} bookmarks',
+    replacedCount: 'Replaced {n} bookmarks',
+    confirmReplaceTitle: 'Confirm replace import',
+    confirmReplaceText: 'Replace import clears all current bookmarks in HA and keeps only the file’s contents. This cannot be undone.',
+    confirmReplace: 'Confirm replace',
+    importFailed: 'Import failed: {msg}',
+    loadError: 'Failed to load bookmarks: {msg}',
+    notConnected: 'Not connected to Home Assistant',
+    saveFailed: 'Save failed: {msg}',
+  },
+};
 
 class BookmarkPanel extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
-    this.shadowRoot.innerHTML = `<style>${STYLES}</style>${TEMPLATE}`;
+    this._locale = this._resolveLocale(typeof navigator !== 'undefined' ? navigator.language : '');
+    this.shadowRoot.innerHTML = `<style>${STYLES}</style>${this._template()}`;
 
     this.doc = emptyDocument();
     this.currentId = null;
@@ -140,15 +299,88 @@ class BookmarkPanel extends HTMLElement {
     this._render();
   }
 
+  // 语言解析：zh* → 中文，其余（含未识别）→ 英文。
+  _resolveLocale(lang) {
+    if (!lang) return 'en';
+    return String(lang).toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  }
+
+  // 取当前语言的文案；带 {var} 占位符时按 vars 替换。缺失键回退英文，再缺失回显键本身。
+  t(key, vars) {
+    const dict = I18N[this._locale] || I18N.en;
+    let str = key in dict ? dict[key] : (key in I18N.en ? I18N.en[key] : key);
+    if (vars) str = str.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
+    return str;
+  }
+
   set hass(value) {
     const first = !this._hass;
     this._hass = value;
+    if (value && value.language) {
+      const locale = this._resolveLocale(value.language);
+      if (locale !== this._locale) {
+        this._locale = locale;
+        if (!first) this._render();
+      }
+    }
     this._syncHaTheme();
     if (first && value) this._load();
   }
 
   get hass() {
     return this._hass;
+  }
+
+  _template() {
+    return `
+<div class="bm-app">
+  <header class="bm-topbar">
+    <button class="bm-icon-btn bm-ha-menu" data-act="ha-menu" title="${this.t('showHideSidebar')}">${ICONS.ha}</button>
+    <div class="bm-brand">
+      <button class="bm-btn bm-folder-toggle" data-act="toggle-sidebar" title="${this.t('showHideFolders')}">${ICONS.folder}<span class="bm-btn-label">${this.t('folders')}</span></button>
+    </div>
+    <div class="bm-search">
+      ${ICONS.search}
+      <input class="bm-search-input" type="search" placeholder="${this.t('searchPlaceholder')}" autocomplete="off" spellcheck="false" />
+      <button class="bm-search-clear" data-act="clear-search" title="${this.t('clearSearch')}" hidden>&times;</button>
+    </div>
+    <div class="bm-actions">
+      <button class="bm-btn" data-act="add-url" title="${this.t('addBookmark')}">${ICONS.star}<span class="bm-btn-label">${this.t('addBookmark')}</span></button>
+      <button class="bm-btn" data-act="add-folder" title="${this.t('addFolder')}">${ICONS.folderPlus}<span class="bm-btn-label">${this.t('addFolder')}</span></button>
+      <button class="bm-icon-btn" data-act="more" title="${this.t('moreOptions')}">${ICONS.more}</button>
+    </div>
+  </header>
+
+  <div class="bm-body">
+    <aside class="bm-sidebar">
+      <div class="bm-sidebar-head"><span>${this.t('folders')}</span><button class="bm-link" data-act="collapse-all">${this.t('collapseAllBtn')}</button></div>
+      <div class="bm-tree" id="tree"></div>
+      <div class="bm-sidebar-foot">
+        <span class="bm-hint-desktop">${this.t('hintDesktop')}</span>
+        <span class="bm-hint-touch">${this.t('hintTouch')}</span>
+      </div>
+    </aside>
+
+    <main class="bm-main">
+      <div class="bm-crumbs" id="crumbs"></div>
+      <div class="bm-list-head">
+        <div class="bm-list-title"><h2 id="folderTitle"></h2><span id="folderCount"></span></div>
+        <div class="bm-list-tools">
+          <button class="bm-icon-btn" data-act="sort" title="${this.t('sortTitle')}">${ICONS.sort}</button>
+          <button class="bm-icon-btn" data-act="more" title="${this.t('moreOptions')}">${ICONS.more}</button>
+        </div>
+      </div>
+      <div class="bm-list" id="list"></div>
+    </main>
+  </div>
+
+  <div class="bm-drawer-scrim" data-act="close-sidebar"></div>
+
+  <div class="bm-menu-layer" id="menuLayer"></div>
+  <div class="bm-dialog-layer" id="dialogLayer"></div>
+  <div class="bm-toast" id="toast"></div>
+</div>
+`;
   }
 
   // 颜色全部由 HA 主题 CSS 变量经 Shadow DOM 继承进来，切换主题时会自动生效。
@@ -224,14 +456,14 @@ class BookmarkPanel extends HTMLElement {
       this.doc = ensureDocument(await res.json());
       this.error = '';
     } catch (err) {
-      this.error = `无法加载收藏数据：${err.message}`;
+      this.error = this.t('loadError', { msg: err.message });
     }
     this._render();
   }
 
   async _save() {
     if (!this.hass) {
-      this._toast('尚未连接 Home Assistant', true);
+      this._toast(this.t('notConnected'), true);
       return;
     }
     try {
@@ -243,7 +475,7 @@ class BookmarkPanel extends HTMLElement {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       this.doc = ensureDocument(await res.json());
     } catch (err) {
-      this._toast(`保存失败：${err.message}`, true);
+      this._toast(this.t('saveFailed', { msg: err.message }), true);
     }
   }
 
@@ -301,20 +533,20 @@ class BookmarkPanel extends HTMLElement {
 
     if (this.error) {
       crumbs.innerHTML = '';
-      title.textContent = '无法加载';
+      title.textContent = this.t('cannotLoad');
       count.textContent = '';
-      list.innerHTML = `<div class="bm-empty bm-error"><p>${escapeHtml(this.error)}</p><button class="bm-btn" data-act="retry">重试</button></div>`;
+      list.innerHTML = `<div class="bm-empty bm-error"><p>${escapeHtml(this.error)}</p><button class="bm-btn" data-act="retry">${this.t('retry')}</button></div>`;
       return;
     }
 
     if (this.query) {
       const results = searchAll(this.doc, this.query);
-      crumbs.innerHTML = '<span class="bm-crumb-static">搜索结果</span>';
-      title.textContent = `“${this.query}” 的搜索结果`;
-      count.textContent = `${results.length} 项`;
+      crumbs.innerHTML = `<span class="bm-crumb-static">${this.t('searchResults')}</span>`;
+      title.textContent = this.t('searchResultsTitle', { q: this.query });
+      count.textContent = this.t('items', { n: results.length });
       list.innerHTML = results.length
         ? results.map((item) => this._urlRow(item.node, item.path.join(' / '))).join('')
-        : this._empty('没有找到匹配的收藏', '试试其他关键词');
+        : this._empty(this.t('emptyNoMatchTitle'), this.t('emptyNoMatchHint'));
       return;
     }
 
@@ -323,11 +555,11 @@ class BookmarkPanel extends HTMLElement {
       // 没有任何根目录：展示创建引导
       if (!this.doc.roots || !this.doc.roots.length) {
         crumbs.innerHTML = '';
-        title.textContent = '网页收藏';
+        title.textContent = this.t('webBookmarks');
         count.textContent = '';
         list.innerHTML = this._empty(
-          '还没有任何收藏',
-          '点击上方「添加文件夹」可创建根目录，或从「更多」导入浏览器收藏文件',
+          this.t('emptyNoBookmarkTitle'),
+          this.t('emptyNoBookmarkHint'),
         );
         return;
       }
@@ -345,13 +577,13 @@ class BookmarkPanel extends HTMLElement {
 
     title.textContent = folder.name;
     const children = folder.children || [];
-    count.textContent = `${children.length} 项`;
+    count.textContent = this.t('items', { n: children.length });
     const folders = sortNodes(children.filter((item) => item.type === 'folder'), this.sortMode);
     const urls = sortNodes(children.filter((item) => item.type === 'url'), this.sortMode);
     list.innerHTML = (folders.length || urls.length)
       ? folders.map((item) => this._folderRow(item)).join('')
         + urls.map((item) => this._urlRow(item)).join('')
-      : this._empty('此文件夹为空', '点击上方按钮添加收藏或文件夹，或从浏览器导入收藏文件');
+      : this._empty(this.t('emptyFolderTitle'), this.t('emptyFolderHint'));
   }
 
   _folderRow(folder) {
@@ -361,7 +593,7 @@ class BookmarkPanel extends HTMLElement {
       <span class="bm-fav bm-fav-folder">${ICONS.folder}</span>
       <div class="bm-row-main">
         <div class="bm-row-name">${escapeHtml(folder.name)}</div>
-        <div class="bm-row-url">文件夹 · ${size} 项</div>
+        <div class="bm-row-url">${this.t('folderItemSub', { n: size })}</div>
       </div>
       <button class="bm-row-more" data-act="row-menu" data-id="${id}" title="更多">${ICONS.more}</button>
     </div>`;
@@ -439,24 +671,24 @@ class BookmarkPanel extends HTMLElement {
 
   _moreItems() {
     return [
-      { act: 'import', label: '导入收藏…（默认合并）', icon: ICONS.upload },
-      { act: 'export-html', label: '导出收藏 (HTML)', icon: ICONS.download },
-      { act: 'export-json', label: '导出标准 JSON', icon: ICONS.download },
+      { act: 'import', label: this.t('importMerge'), icon: ICONS.upload },
+      { act: 'export-html', label: this.t('exportHtml'), icon: ICONS.download },
+      { act: 'export-json', label: this.t('exportJson'), icon: ICONS.download },
       { sep: true },
-      { act: 'sort-set', value: 'custom', label: '自定义顺序', check: this.sortMode === 'custom' },
-      { act: 'sort-set', value: 'name', label: '按名称排序', check: this.sortMode === 'name' },
-      { act: 'sort-set', value: 'date', label: '按添加日期排序', check: this.sortMode === 'date' },
+      { act: 'sort-set', value: 'custom', label: this.t('sortCustom'), check: this.sortMode === 'custom' },
+      { act: 'sort-set', value: 'name', label: this.t('sortName'), check: this.sortMode === 'name' },
+      { act: 'sort-set', value: 'date', label: this.t('sortDate'), check: this.sortMode === 'date' },
       { sep: true },
-      { act: 'expand-all', label: '展开所有文件夹', icon: ICONS.chevron },
-      { act: 'collapse-all', label: '折叠所有文件夹', icon: ICONS.chevron },
+      { act: 'expand-all', label: this.t('expandAll'), icon: ICONS.chevron },
+      { act: 'collapse-all', label: this.t('collapseAllMenu'), icon: ICONS.chevron },
     ];
   }
 
   _sortItems() {
     return [
-      { act: 'sort-set', value: 'custom', label: '自定义顺序', check: this.sortMode === 'custom' },
-      { act: 'sort-set', value: 'name', label: '按名称排序', check: this.sortMode === 'name' },
-      { act: 'sort-set', value: 'date', label: '按添加日期排序', check: this.sortMode === 'date' },
+      { act: 'sort-set', value: 'custom', label: this.t('sortCustom'), check: this.sortMode === 'custom' },
+      { act: 'sort-set', value: 'name', label: this.t('sortName'), check: this.sortMode === 'name' },
+      { act: 'sort-set', value: 'date', label: this.t('sortDate'), check: this.sortMode === 'date' },
     ];
   }
 
@@ -464,21 +696,21 @@ class BookmarkPanel extends HTMLElement {
     const found = findNode(this.doc, id);
     if (found && found.node.type === 'folder') {
       return [
-        { act: 'open-folder', id, label: '打开文件夹', icon: ICONS.folder },
-        { act: 'rename', id, label: '重命名', icon: ICONS.edit },
-        { act: 'move-pick', id, label: '移动到…', icon: ICONS.move },
+        { act: 'open-folder', id, label: this.t('openFolder'), icon: ICONS.folder },
+        { act: 'rename', id, label: this.t('rename'), icon: ICONS.edit },
+        { act: 'move-pick', id, label: this.t('moveTo'), icon: ICONS.move },
         { sep: true },
-        { act: 'delete', id, label: '删除', icon: ICONS.trash, danger: true },
+        { act: 'delete', id, label: this.t('delete'), icon: ICONS.trash, danger: true },
       ];
     }
     return [
-      { act: 'open-url', id, label: '在新标签页打开', icon: ICONS.open },
-      { act: 'copy-url', id, label: '复制链接', icon: ICONS.copy },
+      { act: 'open-url', id, label: this.t('openInNewTab'), icon: ICONS.open },
+      { act: 'copy-url', id, label: this.t('copyLink'), icon: ICONS.copy },
       { sep: true },
-      { act: 'rename', id, label: '编辑', icon: ICONS.edit },
-      { act: 'move-pick', id, label: '移动到…', icon: ICONS.move },
+      { act: 'rename', id, label: this.t('edit'), icon: ICONS.edit },
+      { act: 'move-pick', id, label: this.t('moveTo'), icon: ICONS.move },
       { sep: true },
-      { act: 'delete', id, label: '删除', icon: ICONS.trash, danger: true },
+      { act: 'delete', id, label: this.t('delete'), icon: ICONS.trash, danger: true },
     ];
   }
 
@@ -503,8 +735,8 @@ class BookmarkPanel extends HTMLElement {
       ${options.text ? `<p class="bm-dialog-text">${escapeHtml(options.text)}</p>` : ''}
       <div class="bm-dialog-body">${fields}${options.hint ? `<p class="bm-field-hint">${escapeHtml(options.hint)}</p>` : ''}</div>
       <div class="bm-dialog-foot">
-        <button class="bm-btn" data-act="dialog-cancel">取消</button>
-        <button class="bm-btn ${options.danger ? 'bm-btn-danger' : 'bm-btn-primary'}" data-act="dialog-ok">${escapeHtml(options.confirmText || '确定')}</button>
+        <button class="bm-btn" data-act="dialog-cancel">${this.t('cancel')}</button>
+        <button class="bm-btn ${options.danger ? 'bm-btn-danger' : 'bm-btn-primary'}" data-act="dialog-ok">${escapeHtml(options.confirmText || this.t('ok'))}</button>
       </div>
     </div></div>`;
     layer.classList.add('show');
@@ -538,14 +770,14 @@ class BookmarkPanel extends HTMLElement {
     if (!info) return;
     const layer = this.$('#dialogLayer');
     if (!layer || !layer.classList.contains('show')) return;
-    if (!this._dialog || this._dialog.title !== '添加收藏') return;
+    if (!this._dialog || !this._dialog.isAddUrl) return;
     const nameEl = layer.querySelector('[data-field="name"]');
     const urlEl = layer.querySelector('[data-field="url"]');
     if (nameEl && !nameEl.value) nameEl.value = info.title || '';
     if (urlEl && !urlEl.value) urlEl.value = info.url || '';
   }
 
-  /** 收集所有文件夹作为下拉选项（value=id，label=完整路径） */
+  /** 收集所有文件夹作为下拉选项（value=id，label=完整路径）。调用方按需自行 unshift 顶层根目录项。 */
   _folderOptions(selectedId) {
     const options = [];
     walkNodes(this.doc, (node, parent, ancestors) => {
@@ -567,25 +799,26 @@ class BookmarkPanel extends HTMLElement {
     // 默认分类 = 当前所在文件夹（可在对话框里改成其它分类）
     const activeId = this._activeFolderId();
     if (!activeId) {
-      this._toast('请先创建根目录或文件夹', true);
+      this._toast(this.t('createRootFirst'), true);
       return;
     }
     const { options, selectedId } = this._folderOptions(activeId);
     this._openDialog({
-      title: '添加收藏',
-      confirmText: '添加',
+      title: this.t('addBookmarkTitle'),
+      confirmText: this.t('add'),
+      isAddUrl: true,
       fields: [
-        { name: 'name', label: '名称', placeholder: '例如：Home Assistant', value: ext.title || '' },
-        { name: 'url', label: '网址', placeholder: 'https://', value: ext.url || '' },
+        { name: 'name', label: this.t('nameLabel'), placeholder: this.t('namePlaceholder'), value: ext.title || '' },
+        { name: 'url', label: this.t('urlLabel'), placeholder: this.t('urlPlaceholder'), value: ext.url || '' },
         {
-          name: 'category', label: '分类', type: 'select',
+          name: 'category', label: this.t('categoryLabel'), type: 'select',
           value: selectedId, options,
         },
       ],
       onOk: async (values) => {
         let url = String(values.url || '').trim();
         if (!url) {
-          this._toast('请输入网址', true);
+          this._toast(this.t('enterUrl'), true);
           return;
         }
         if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
@@ -598,7 +831,7 @@ class BookmarkPanel extends HTMLElement {
         this.currentId = values.category || activeId;
         this.expanded.add(this.currentId);
         await this._commit();
-        this._toast('已添加收藏');
+        this._toast(this.t('addedBookmark'));
       },
     });
     // 在扩展内时，点击即向扩展请求“当前”活动标签页，覆盖为最新页面
@@ -611,22 +844,22 @@ class BookmarkPanel extends HTMLElement {
     const activeId = this._activeFolderId();
     const { options, selectedId } = this._folderOptions(activeId);
     // 空分类 = 创建为顶层根目录；还没有任何文件夹时下拉里只有这一项
-    options.unshift({ value: '', label: '（顶层根目录）' });
+    options.unshift({ value: '', label: this.t('topRoot') });
     this._openDialog({
-      title: '添加文件夹',
-      confirmText: '添加',
-      hint: '分类留空时，会在根目录下新建一个顶层文件夹',
+      title: this.t('addFolderTitle'),
+      confirmText: this.t('add'),
+      hint: this.t('emptyCategoryHint'),
       fields: [
-        { name: 'name', label: '文件夹名称', placeholder: '新文件夹' },
+        { name: 'name', label: this.t('nameLabel'), placeholder: this.t('folderNamePlaceholder') },
         {
-          name: 'category', label: '分类', type: 'select',
+          name: 'category', label: this.t('categoryLabel'), type: 'select',
           value: selectedId || '', options,
         },
       ],
       onOk: async (values) => {
         const name = String(values.name || '').trim();
         if (!name) {
-          this._toast('请输入文件夹名称', true);
+          this._toast(this.t('enterFolderName'), true);
           return;
         }
         const parentId = values.category || '';
@@ -635,7 +868,7 @@ class BookmarkPanel extends HTMLElement {
         const asRoot = !node;
         if (asRoot) node = addRoot(this.doc, { name, type: 'folder' });
         if (!node) {
-          this._toast('添加文件夹失败', true);
+          this._toast(this.t('addFolderFailed'), true);
           return;
         }
         // 停留在所选分类，便于确认新文件夹的落点
@@ -643,7 +876,7 @@ class BookmarkPanel extends HTMLElement {
         this.expanded.add(this.currentId);
         this.expanded.add(node.id);
         await this._commit();
-        this._toast(asRoot ? '已创建根目录' : '已添加文件夹');
+        this._toast(asRoot ? this.t('createdRoot') : this.t('addedFolder'));
       },
     });
   }
@@ -653,23 +886,23 @@ class BookmarkPanel extends HTMLElement {
     if (!found) return;
     const isFolder = found.node.type === 'folder';
     this._openDialog({
-      title: isFolder ? '重命名文件夹' : '编辑收藏',
-      confirmText: '保存',
+      title: isFolder ? this.t('renameFolderTitle') : this.t('editBookmarkTitle'),
+      confirmText: this.t('save'),
       fields: [
-        { name: 'name', label: '名称', value: found.node.name },
-        ...(isFolder ? [] : [{ name: 'url', label: '网址', value: found.node.url }]),
+        { name: 'name', label: this.t('nameLabel'), value: found.node.name },
+        ...(isFolder ? [] : [{ name: 'url', label: this.t('urlLabel'), value: found.node.url }]),
       ],
       onOk: async (values) => {
         const name = String(values.name || '').trim();
         if (!name) {
-          this._toast('名称不能为空', true);
+          this._toast(this.t('nameRequired'), true);
           return;
         }
         const patch = { name };
         if (!isFolder) {
           let url = String(values.url || '').trim();
           if (!url) {
-            this._toast('网址不能为空', true);
+            this._toast(this.t('urlRequired'), true);
             return;
           }
           if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) url = `https://${url}`;
@@ -677,7 +910,7 @@ class BookmarkPanel extends HTMLElement {
         }
         updateNode(this.doc, id, patch);
         await this._commit();
-        this._toast('已保存');
+        this._toast(this.t('saved'));
       },
     });
   }
@@ -688,22 +921,22 @@ class BookmarkPanel extends HTMLElement {
     const { options } = this._folderOptions(found.parent ? found.parent.id : '');
     // 文件夹可以移动到顶层根目录
     if (found.node.type === 'folder') {
-      options.unshift({ value: '', label: '（移动到根目录）' });
+      options.unshift({ value: '', label: this.t('moveToRoot') });
     }
     const selectedId = found.parent ? found.parent.id : '';
     this._openDialog({
-      title: '移动到',
-      confirmText: '移动',
+      title: this.t('moveTitle'),
+      confirmText: this.t('move'),
       fields: [{
-        name: 'parent', label: '目标文件夹', type: 'select',
+        name: 'parent', label: this.t('moveLabel'), type: 'select',
         value: selectedId, options,
       }],
       onOk: async (values) => {
         if (moveNode(this.doc, id, values.parent)) {
           await this._commit();
-          this._toast('已移动');
+          this._toast(this.t('moved'));
         } else {
-          this._toast('无法移动到该位置', true);
+          this._toast(this.t('cannotMove'), true);
         }
       },
     });
@@ -714,9 +947,10 @@ class BookmarkPanel extends HTMLElement {
     if (!found) return;
     const isFolder = found.node.type === 'folder';
     this._openDialog({
-      title: isFolder ? '删除文件夹' : '删除收藏',
-      text: `确定要删除“${found.node.name}”吗？${isFolder ? '其中的所有内容也会一并删除。' : ''}`,
-      confirmText: '删除',
+      title: isFolder ? this.t('deleteFolderTitle') : this.t('deleteBookmarkTitle'),
+      text: this.t('deleteConfirm', { name: found.node.name })
+        + (isFolder ? this.t('deleteFolderExtra') : ''),
+      confirmText: this.t('delete'),
       danger: true,
       onOk: async () => {
         if (this.currentId === id) {
@@ -726,7 +960,7 @@ class BookmarkPanel extends HTMLElement {
         }
         if (removeNode(this.doc, id)) {
           await this._commit();
-          this._toast('已删除');
+          this._toast(this.t('deleted'));
         }
       },
     });
@@ -755,7 +989,7 @@ class BookmarkPanel extends HTMLElement {
       document.execCommand('copy');
       area.remove();
     }
-    this._toast('已复制链接');
+    this._toast(this.t('copiedLink'));
   }
 
   async _export(format, filename, mime) {
@@ -764,9 +998,9 @@ class BookmarkPanel extends HTMLElement {
       const res = await this.hass.fetchWithAuth(`/api/bookmark/export?format=${format}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       this._download(filename, await res.text(), mime);
-      this._toast(`已导出 ${format === 'json' ? '标准 JSON' : '收藏 HTML'}`);
+      this._toast(this.t('exported', { type: this.t(format === 'json' ? 'exportTypeJson' : 'exportTypeHtml') }));
     } catch (err) {
-      this._toast(`导出失败：${err.message}`, true);
+      this._toast(this.t('exportFailed', { msg: err.message }), true);
     }
   }
 
@@ -797,17 +1031,17 @@ class BookmarkPanel extends HTMLElement {
   /** 导入对话框：选择外部浏览器导出的标准收藏文件，并选择导入方式（默认合并） */
   _importDialog() {
     this._openDialog({
-      title: '导入收藏',
-      confirmText: '导入',
-      text: '支持 Edge / Chrome / Firefox 导出的收藏 HTML，以及 Chrome / Edge 的 Bookmarks JSON。',
-      hint: '合并导入：把外部浏览器的收藏按根追加进来，HA 里已有的收藏保持不变。覆盖导入：清空现有全部收藏，只保留文件中的内容。',
+      title: this.t('importTitle'),
+      confirmText: this.t('import'),
+      text: this.t('importText'),
+      hint: this.t('importHint'),
       fields: [
-        { name: 'file', label: '收藏文件', type: 'file' },
+        { name: 'file', label: this.t('fileLabel'), type: 'file' },
         {
-          name: 'mode', label: '导入方式', type: 'select', value: 'merge',
+          name: 'mode', label: this.t('importModeLabel'), type: 'select', value: 'merge',
           options: [
-            { value: 'merge', label: '合并导入（保留现有收藏，默认）' },
-            { value: 'replace', label: '覆盖导入（清空现有收藏）' },
+            { value: 'merge', label: this.t('mergeMode') },
+            { value: 'replace', label: this.t('replaceMode') },
           ],
         },
       ],
@@ -818,7 +1052,7 @@ class BookmarkPanel extends HTMLElement {
   _submitImport(values) {
     const file = values.file;
     if (!file) {
-      this._toast('请选择收藏文件', true);
+      this._toast(this.t('selectFile'), true);
       return;
     }
     const mode = values.mode === 'replace' ? 'replace' : 'merge';
@@ -844,18 +1078,18 @@ class BookmarkPanel extends HTMLElement {
         if (search) search.value = '';
         this._render();
         this._toast(mode === 'replace'
-          ? `已覆盖导入 ${result.count} 项收藏`
-          : `已合并导入 ${result.count} 项收藏`);
+          ? this.t('replacedCount', { n: result.count })
+          : this.t('mergedCount', { n: result.count }));
       } catch (err) {
-        this._toast(`导入失败：${err.message}`, true);
+        this._toast(this.t('importFailed', { msg: err.message }), true);
       }
     };
 
     if (mode === 'replace') {
       this._openDialog({
-        title: '确认覆盖导入',
-        text: '覆盖导入会清空 HA 中现有的全部收藏，只保留所选文件中的内容。此操作不可撤销。',
-        confirmText: '确认覆盖',
+        title: this.t('confirmReplaceTitle'),
+        text: this.t('confirmReplaceText'),
+        confirmText: this.t('confirmReplace'),
         danger: true,
         onOk: run,
       });
@@ -937,7 +1171,7 @@ class BookmarkPanel extends HTMLElement {
       this._clearDropTarget();
       if (moveNode(this.doc, source, drop.dataset.id)) {
         await this._commit();
-        this._toast('已移动');
+        this._toast(this.t('moved'));
       }
     });
     root.addEventListener('dragend', () => {
