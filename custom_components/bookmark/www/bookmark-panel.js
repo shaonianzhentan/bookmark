@@ -28,6 +28,7 @@ const ICONS = {
   menu: svg('<path d="M2 3.4h12v1.3H2zm0 3.9h12v1.3H2zm0 3.9h12v1.3H2z"/>'),
   search: svg('<path d="M6.8 1.8a5 5 0 1 0 3.06 8.95l3.2 3.2.92-.92-3.2-3.2A5 5 0 0 0 6.8 1.8Zm0 1.3a3.7 3.7 0 1 1 0 7.4 3.7 3.7 0 0 1 0-7.4Z"/>'),
   plus: svg('<path d="M7.1 2.2h1.8v4.9h4.9v1.8H8.9v4.9H7.1V8.9H2.2V7.1h4.9z"/>'),
+  star: svg('<path d="M8 1.5l2 4.1 4.6.6-3.4 3.2.9 4.6L8 11.8 3.9 14l.9-4.6L1.4 6.2l4.6-.6z"/>'),
   folderPlus: svg('<path d="M1.5 3.6A1.6 1.6 0 0 1 3.1 2h3l1.4 1.5h6.4A1.6 1.6 0 0 1 15.5 5v7.4a1.6 1.6 0 0 1-1.6 1.6H3.1a1.6 1.6 0 0 1-1.6-1.6V3.6Zm1.3 0v8.8c0 .17.13.3.3.3h10.8a.3.3 0 0 0 .3-.3V5a.3.3 0 0 0-.3-.3H7L5.6 3.2H3.1a.3.3 0 0 0-.3.4Z"/><path d="M7.35 6.3h1.3V8.5h2.2v1.3H8.65v2.2h-1.3V9.8h-2.2V8.5h2.2z"/>'),
   folder: svg('<path d="M1.5 3.6A1.6 1.6 0 0 1 3.1 2h3l1.4 1.5h6.4A1.6 1.6 0 0 1 15.5 5v7.4a1.6 1.6 0 0 1-1.6 1.6H3.1a1.6 1.6 0 0 1-1.6-1.6V3.6Zm1.3 0v8.8c0 .17.13.3.3.3h10.8a.3.3 0 0 0 .3-.3V5a.3.3 0 0 0-.3-.3H7L5.6 3.2H3.1a.3.3 0 0 0-.3.4Z"/>'),
   chevron: svg('<path d="M5.7 2.8 10.6 8l-4.9 5.2-.95-.9L8.7 8 4.75 3.7z"/>'),
@@ -45,7 +46,7 @@ const ICONS = {
 
 // 与浏览器扩展（ha-extension）约定的通信协议：
 // 面板在扩展的 iframe 内时，扩展会把「当前活动标签页」的标题/网址推过来，
-// 用于预填“添加收藏夹”对话框；直接在 HA 中使用时不会触发。
+// 用于预填“添加收藏”对话框；直接在 HA 中使用时不会触发。
 const EXT_MSG = {
   HELLO: 'HA_EXT_HELLO',
   READY: 'HA_EXT_READY',
@@ -69,11 +70,11 @@ const TEMPLATE = `
     </div>
     <div class="bm-search">
       ${ICONS.search}
-      <input class="bm-search-input" type="search" placeholder="搜索收藏夹" autocomplete="off" spellcheck="false" />
+      <input class="bm-search-input" type="search" placeholder="搜索收藏" autocomplete="off" spellcheck="false" />
       <button class="bm-search-clear" data-act="clear-search" title="清除搜索" hidden>&times;</button>
     </div>
     <div class="bm-actions">
-      <button class="bm-btn" data-act="add-url" title="添加收藏夹">${ICONS.plus}<span class="bm-btn-label">添加收藏夹</span></button>
+      <button class="bm-btn" data-act="add-url" title="添加收藏">${ICONS.star}<span class="bm-btn-label">添加收藏</span></button>
       <button class="bm-btn" data-act="add-folder" title="添加文件夹">${ICONS.folderPlus}<span class="bm-btn-label">添加文件夹</span></button>
       <button class="bm-icon-btn" data-act="more" title="更多选项">${ICONS.more}</button>
     </div>
@@ -102,6 +103,8 @@ const TEMPLATE = `
     </main>
   </div>
 
+  <div class="bm-drawer-scrim" data-act="close-sidebar"></div>
+
   <div class="bm-menu-layer" id="menuLayer"></div>
   <div class="bm-dialog-layer" id="dialogLayer"></div>
   <div class="bm-toast" id="toast"></div>
@@ -126,6 +129,7 @@ class BookmarkPanel extends HTMLElement {
     this._hass = null;
     this._toastTimer = null;
     this._extTabInfo = null;
+    this._colorScheme = '';
 
     this._docClick = (ev) => {
       if (ev.composedPath && ev.composedPath().includes(this)) return;
@@ -139,11 +143,24 @@ class BookmarkPanel extends HTMLElement {
   set hass(value) {
     const first = !this._hass;
     this._hass = value;
+    this._syncHaTheme();
     if (first && value) this._load();
   }
 
   get hass() {
     return this._hass;
+  }
+
+  // 颜色全部由 HA 主题 CSS 变量经 Shadow DOM 继承进来，切换主题时会自动生效。
+  // 但原生控件（select 下拉、输入框、滚动条）由 color-scheme 决定，而 HA 的
+  // 浅/深色主题可以与系统外观相反，所以按 hass.themes.darkMode 显式同步一次。
+  _syncHaTheme() {
+    const darkMode = this._hass && this._hass.themes ? this._hass.themes.darkMode : undefined;
+    const scheme = typeof darkMode === 'boolean' ? (darkMode ? 'dark' : 'light') : '';
+    if (scheme === this._colorScheme) return;
+    this._colorScheme = scheme;
+    if (scheme) this.style.colorScheme = scheme;
+    else this.style.removeProperty('color-scheme');
   }
 
   // 切换 Home Assistant 自带的侧边栏（移动端开抽屉、桌面端切停靠）。
@@ -310,7 +327,7 @@ class BookmarkPanel extends HTMLElement {
         count.textContent = '';
         list.innerHTML = this._empty(
           '还没有任何收藏',
-          '点击上方「添加文件夹」可创建根目录，或从「更多」导入浏览器收藏夹文件',
+          '点击上方「添加文件夹」可创建根目录，或从「更多」导入浏览器收藏文件',
         );
         return;
       }
@@ -334,7 +351,7 @@ class BookmarkPanel extends HTMLElement {
     list.innerHTML = (folders.length || urls.length)
       ? folders.map((item) => this._folderRow(item)).join('')
         + urls.map((item) => this._urlRow(item)).join('')
-      : this._empty('此文件夹为空', '点击上方按钮添加收藏夹或文件夹，或从浏览器导入收藏夹文件');
+      : this._empty('此文件夹为空', '点击上方按钮添加收藏或文件夹，或从浏览器导入收藏文件');
   }
 
   _folderRow(folder) {
@@ -422,8 +439,8 @@ class BookmarkPanel extends HTMLElement {
 
   _moreItems() {
     return [
-      { act: 'import', label: '导入收藏夹…（默认合并）', icon: ICONS.upload },
-      { act: 'export-html', label: '导出收藏夹 (HTML)', icon: ICONS.download },
+      { act: 'import', label: '导入收藏…（默认合并）', icon: ICONS.upload },
+      { act: 'export-html', label: '导出收藏 (HTML)', icon: ICONS.download },
       { act: 'export-json', label: '导出标准 JSON', icon: ICONS.download },
       { sep: true },
       { act: 'sort-set', value: 'custom', label: '自定义顺序', check: this.sortMode === 'custom' },
@@ -514,14 +531,14 @@ class BookmarkPanel extends HTMLElement {
     if (options && options.onOk) options.onOk(values);
   }
 
-  // 若当前正开着“添加收藏夹”对话框，把扩展回传的标签页信息填进名称/网址；
+  // 若当前正开着“添加收藏”对话框，把扩展回传的标签页信息填进名称/网址；
   // 仅当字段尚为空时才填，避免覆盖用户已输入的内容。
   _fillTabInfoIntoAddDialog() {
     const info = this._extTabInfo;
     if (!info) return;
     const layer = this.$('#dialogLayer');
     if (!layer || !layer.classList.contains('show')) return;
-    if (!this._dialog || this._dialog.title !== '添加收藏夹') return;
+    if (!this._dialog || this._dialog.title !== '添加收藏') return;
     const nameEl = layer.querySelector('[data-field="name"]');
     const urlEl = layer.querySelector('[data-field="url"]');
     if (nameEl && !nameEl.value) nameEl.value = info.title || '';
@@ -555,7 +572,7 @@ class BookmarkPanel extends HTMLElement {
     }
     const { options, selectedId } = this._folderOptions(activeId);
     this._openDialog({
-      title: '添加收藏夹',
+      title: '添加收藏',
       confirmText: '添加',
       fields: [
         { name: 'name', label: '名称', placeholder: '例如：Home Assistant', value: ext.title || '' },
@@ -581,7 +598,7 @@ class BookmarkPanel extends HTMLElement {
         this.currentId = values.category || activeId;
         this.expanded.add(this.currentId);
         await this._commit();
-        this._toast('已添加收藏夹');
+        this._toast('已添加收藏');
       },
     });
     // 在扩展内时，点击即向扩展请求“当前”活动标签页，覆盖为最新页面
@@ -636,7 +653,7 @@ class BookmarkPanel extends HTMLElement {
     if (!found) return;
     const isFolder = found.node.type === 'folder';
     this._openDialog({
-      title: isFolder ? '重命名文件夹' : '编辑收藏夹',
+      title: isFolder ? '重命名文件夹' : '编辑收藏',
       confirmText: '保存',
       fields: [
         { name: 'name', label: '名称', value: found.node.name },
@@ -697,7 +714,7 @@ class BookmarkPanel extends HTMLElement {
     if (!found) return;
     const isFolder = found.node.type === 'folder';
     this._openDialog({
-      title: isFolder ? '删除文件夹' : '删除收藏夹',
+      title: isFolder ? '删除文件夹' : '删除收藏',
       text: `确定要删除“${found.node.name}”吗？${isFolder ? '其中的所有内容也会一并删除。' : ''}`,
       confirmText: '删除',
       danger: true,
@@ -754,7 +771,7 @@ class BookmarkPanel extends HTMLElement {
   }
 
   _exportHtml() {
-    // 与 Edge 导出的收藏夹文件保持同样的命名：favorites_2026_11_9.html
+    // 与 Edge 导出的收藏文件保持同样的命名：favorites_2026_11_9.html
     const now = new Date();
     const name = `favorites_${now.getFullYear()}_${now.getMonth() + 1}_${now.getDate()}.html`;
     this._export('html', name, 'text/html;charset=utf-8');
@@ -777,15 +794,15 @@ class BookmarkPanel extends HTMLElement {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
-  /** 导入对话框：选择外部浏览器导出的标准收藏夹文件，并选择导入方式（默认合并） */
+  /** 导入对话框：选择外部浏览器导出的标准收藏文件，并选择导入方式（默认合并） */
   _importDialog() {
     this._openDialog({
-      title: '导入收藏夹',
+      title: '导入收藏',
       confirmText: '导入',
       text: '支持 Edge / Chrome / Firefox 导出的收藏 HTML，以及 Chrome / Edge 的 Bookmarks JSON。',
       hint: '合并导入：把外部浏览器的收藏按根追加进来，HA 里已有的收藏保持不变。覆盖导入：清空现有全部收藏，只保留文件中的内容。',
       fields: [
-        { name: 'file', label: '收藏夹文件', type: 'file' },
+        { name: 'file', label: '收藏文件', type: 'file' },
         {
           name: 'mode', label: '导入方式', type: 'select', value: 'merge',
           options: [
@@ -801,14 +818,14 @@ class BookmarkPanel extends HTMLElement {
   _submitImport(values) {
     const file = values.file;
     if (!file) {
-      this._toast('请选择收藏夹文件', true);
+      this._toast('请选择收藏文件', true);
       return;
     }
     const mode = values.mode === 'replace' ? 'replace' : 'merge';
 
     const run = async () => {
       try {
-        // 原样把标准收藏夹文件发给 Python，格式识别、转换、合并/覆盖、落盘都在后端
+        // 原样把标准收藏文件发给 Python，格式识别、转换、合并/覆盖、落盘都在后端
         const res = await this.hass.fetchWithAuth('/api/bookmark/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -872,6 +889,11 @@ class BookmarkPanel extends HTMLElement {
       if (ev.key === 'Escape') {
         this._closeMenu();
         this._closeDialog();
+        if (ev.target.classList.contains('bm-search-input')) ev.target.blur();
+      } else if (ev.key === 'Enter' && ev.target.classList.contains('bm-search-input')
+        && this.classList.contains('narrow')) {
+        // 移动端键盘的「搜索/完成」不会自动失焦，主动 blur 让右侧操作还原
+        ev.target.blur();
       } else if (ev.key === 'Enter' && ev.target.tagName === 'INPUT'
         && ev.target.type !== 'file'
         && this.$('#dialogLayer').classList.contains('show')) {
@@ -955,6 +977,9 @@ class BookmarkPanel extends HTMLElement {
     switch (act) {
       case 'toggle-sidebar':
         this.$('.bm-app').classList.toggle('sidebar-collapsed');
+        break;
+      case 'close-sidebar':
+        this.$('.bm-app').classList.add('sidebar-collapsed');
         break;
       case 'ha-menu':
         this._toggleHaSidebar();
