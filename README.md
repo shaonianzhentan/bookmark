@@ -2,6 +2,8 @@
 
 Home Assistant 里的「收藏夹」面板。参考 Microsoft Edge 收藏夹管理器复刻，支持文件夹树、搜索、拖放移动、编辑/删除，以及浏览器标准收藏数据的导入导出。
 
+![preview](screenshot.png)
+
 [![hacs_badge](https://img.shields.io/badge/Home-Assistant-%23049cdb)](https://www.home-assistant.io/)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 ![visit](https://visitor-badge.laobi.icu/badge?page_id=shaonianzhentan.bookmark&left_text=visit)
@@ -10,11 +12,24 @@ Home Assistant 里的「收藏夹」面板。参考 Microsoft Edge 收藏夹管�
 
 ## 安装
 
-安装完成重启 HA，刷新一下页面，在集成里搜索 `bookmark` 即可。
+### 方式一：Marketplace / HACS（推荐）
+
+1. 在 Home Assistant 的 **Marketplace**（或 HACS）中搜索 `bookmark`。
+2. 点击「下载 / 安装」，等待完成后**重启 Home Assistant**。
+3. 刷新页面，进入「设置 → 设备与服务 → 添加集成」，搜索 `bookmark` 并完成配置。
+
+### 方式二：一键添加
+
+点击下方按钮，会自动跳转并在你的 HA 中打开集成添加流程：
 
 [![Add Integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start?domain=bookmark)
 
-集成添加后，侧边栏会出现「收藏夹」入口（勾选「仅管理员可见」时只对管理员显示）。
+### 方式三：手动安装
+
+1. 下载本仓库，将 `custom_components/bookmark` 目录放到你的 HA 配置目录（即 `configuration.yaml` 所在目录）下。
+2. **重启 Home Assistant**，再按方式一第 3 步添加集成。
+
+> 集成添加后，侧边栏会出现「收藏夹」入口（勾选「仅管理员可见」时只对管理员显示）。
 
 ## 使用
 
