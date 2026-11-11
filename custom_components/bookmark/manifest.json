@@ -1,14 +1,14 @@
 {
   "domain": "bookmark",
   "name": "网页收藏",
-  "version": "2026.11.11",
-  "config_flow": true,
-  "documentation": "https://github.com/shaonianzhentan/bookmark",
-  "issue_tracker": "https://github.com/shaonianzhentan/bookmark/issues",
-  "dependencies": [],
   "codeowners": [
     "@shaonianzhentan"
   ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/shaonianzhentan/bookmark",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/shaonianzhentan/bookmark/issues",
   "quality_scale": "internal",
-  "iot_class": "local_polling"
+  "version": "2026.11.11"
 }
