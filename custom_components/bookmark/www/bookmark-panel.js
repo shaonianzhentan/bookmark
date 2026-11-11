@@ -627,7 +627,15 @@ class BookmarkPanel extends HTMLElement {
   _favicon(node) {
     if (node.icon) return node.icon;
     try {
-      return `${new URL(node.url).origin}/favicon.ico`;
+      const u = new URL(node.url);
+      const faviconUrl = `${u.origin}/favicon.ico`;
+      // 只有「HA 以 https 访问、而收藏站点是 http」时才走后端代理，
+      // 其余情况（HA 是 http，或收藏站点也是 https）由前端直接请求，
+      // 避免把 https 站点的 favicon 也白白占用 HA 服务端资源
+      const mixed = location.protocol === 'https:' && u.protocol === 'http:';
+      return mixed
+        ? `/api/bookmark/favicon?url=${encodeURIComponent(faviconUrl)}`
+        : faviconUrl;
     } catch {
       return DEFAULT_FAVICON;
     }

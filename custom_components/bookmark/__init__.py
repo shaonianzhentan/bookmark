@@ -10,7 +10,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, MODULE_URL, PANEL_ELEMENT, WWW_PATH
-from .http import BookmarkExportView, BookmarkImportView, BookmarkView
+from .http import (
+    BookmarkExportView,
+    BookmarkFaviconView,
+    BookmarkImportView,
+    BookmarkView,
+)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -19,7 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # HTTP 视图与静态路径没有对应的注销 API，整个 HA 进程只需注册一次，
     # 避免集成重载 / 配置更新时重复注册报错。
     if not data.get("view_registered"):
-        for view in (BookmarkView, BookmarkImportView, BookmarkExportView):
+        for view in (BookmarkView, BookmarkImportView, BookmarkExportView, BookmarkFaviconView):
             hass.http.register_view(view)
         data["view_registered"] = True
 

@@ -8,14 +8,17 @@ Python 在读取时把 HTML 转换成标准收藏树、写入时再序列化回 
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from http import HTTPStatus
 from typing import Any
+from urllib.parse import urlparse
 
-from aiohttp import web
+from aiohttp import ClientError, ClientTimeout, web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import STORAGE_DIR
 
 from .const import API_NAME, API_URL, DOMAIN
@@ -147,4 +150,68 @@ class BookmarkExportView(HomeAssistantView):
         return web.Response(
             body=to_netscape_html(doc).encode("utf-8"),
             headers={"Content-Type": "text/html; charset=utf-8"},
+        )
+
+
+# 抓取的 favicon 体积上限：超过即视为异常，直接放弃
+_MAX_FAVICON_BYTES = 256 * 1024
+
+
+class BookmarkFaviconView(HomeAssistantView):
+    """代理抓取网站 favicon，绕过前端直接请求 http 站点导致的混合内容/跨域问题。
+
+    HA 面板本身跑在 https 上，而部分书签站点是 http，浏览器会拦截
+    ``http://.../favicon.ico`` 这样的混合内容请求。改为由 HA 后端服务端去抓取，
+    前端只请求同源的 ``/api/bookmark/favicon?url=...``，就不会被浏览器拦截。
+    """
+
+    url = f"{API_URL}/favicon"
+    name = f"api:{DOMAIN}:favicon"
+    cors_allowed = True
+
+    async def get(self, request):
+        hass = request.app["hass"]
+        target = request.query.get("url", "")
+        if not target:
+            return self.json_message("Missing url", HTTPStatus.BAD_REQUEST)
+
+        parsed = urlparse(target)
+        # 只允许 http/https，且禁止在 URL 里夹带用户凭证，限制其作为通用代理的能力
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return self.json_message("Invalid url", HTTPStatus.BAD_REQUEST)
+        if parsed.username is not None or parsed.password is not None:
+            return self.json_message("Invalid url", HTTPStatus.BAD_REQUEST)
+
+        session = async_get_clientsession(hass)
+        try:
+            async with session.get(
+                target,
+                timeout=ClientTimeout(total=8),
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (compatible; BookmarkFaviconBot/1.0)"
+                    )
+                },
+                allow_redirects=True,
+            ) as resp:
+                if resp.status != HTTPStatus.OK:
+                    return web.Response(status=HTTPStatus.NOT_FOUND)
+                ctype = resp.headers.get("Content-Type", "")
+                if not ctype.startswith("image/"):
+                    return web.Response(status=HTTPStatus.NOT_FOUND)
+
+                # 分块读取并限制体积，避免把异常大的响应整个吃进内存
+                data = b""
+                async for chunk in resp.content.iter_chunked(8192):
+                    data += chunk
+                    if len(data) > _MAX_FAVICON_BYTES:
+                        return web.Response(status=HTTPStatus.NOT_FOUND)
+        except (asyncio.TimeoutError, ClientError) as err:
+            _LOGGER.debug("获取 favicon 失败 %s: %s", target, err)
+            return web.Response(status=HTTPStatus.NOT_FOUND)
+
+        return web.Response(
+            body=data,
+            content_type=ctype or "image/x-icon",
+            headers={"Cache-Control": "public, max-age=86400"},
         )
