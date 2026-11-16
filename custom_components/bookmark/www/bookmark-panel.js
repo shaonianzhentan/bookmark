@@ -16,6 +16,7 @@ import {
   escapeHtml,
   findNode,
   moveNode,
+  moveNodeRelative,
   removeNode,
   searchAll,
   sortNodes,
@@ -35,7 +36,6 @@ const ICONS = {
   folder: svg('<path d="M1.5 3.6A1.6 1.6 0 0 1 3.1 2h3l1.4 1.5h6.4A1.6 1.6 0 0 1 15.5 5v7.4a1.6 1.6 0 0 1-1.6 1.6H3.1a1.6 1.6 0 0 1-1.6-1.6V3.6Zm1.3 0v8.8c0 .17.13.3.3.3h10.8a.3.3 0 0 0 .3-.3V5a.3.3 0 0 0-.3-.3H7L5.6 3.2H3.1a.3.3 0 0 0-.3.4Z"/>'),
   chevron: svg('<path d="M5.7 2.8 10.6 8l-4.9 5.2-.95-.9L8.7 8 4.75 3.7z"/>'),
   more: svg('<circle cx="3" cy="8" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="13" cy="8" r="1.25"/>'),
-  ha: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12.018 2.018a1.7 1.7 0 0 0-1.206.498l-8.296 8.296a1.7 1.7 0 0 0-.498 1.206v7.696c0 .94.766 1.705 1.705 1.705h6.396v-6.397h3.397v6.397h6.396a1.7 1.7 0 0 0 1.705-1.705v-7.696a1.7 1.7 0 0 0-.498-1.206l-8.296-8.296a1.7 1.7 0 0 0-1.187-.5z"/></svg>',
   sort: svg('<path d="M2 3.4h12v1.3H2zm0 3.9h9v1.3H2zm0 3.9h6v1.3H2z"/>'),
   open: svg('<path d="M8.5 2H14v5.5h-1.3V4.35L8.1 9l-.92-.92 4.65-4.65H8.5zM12.5 9.5v3a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1h3V2h-3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3z"/>'),
   copy: svg('<path d="M5.5 1.5h7a1 1 0 0 1 1 1v9h-1.3V2.8H5.5zM3.5 4h7a1 1 0 0 1 1 1v9.5H3.5zM4.8 5.3v8h5.4v-8z"/>'),
@@ -75,7 +75,7 @@ const I18N = {
     addFolder: '添加文件夹',
     moreOptions: '更多选项',
     collapseAllBtn: '全部折叠',
-    hintDesktop: '拖动条目到文件夹即可移动；点行尾 ··· 查看更多操作。',
+    hintDesktop: '拖动条目到文件夹中间可移入，拖到文件夹上/下边缘可调整顺序；点行尾 ··· 查看更多操作。',
     hintTouch: '点行尾 ··· 可编辑、用「移动到…」调整分类或删除。',
     sortTitle: '排序方式',
     cannotLoad: '无法加载',
@@ -134,6 +134,7 @@ const I18N = {
     moveTitle: '移动到',
     moveLabel: '目标文件夹',
     moved: '已移动',
+    reordered: '已调整顺序',
     cannotMove: '无法移动到该位置',
     deleteFolderTitle: '删除文件夹',
     deleteBookmarkTitle: '删除收藏',
@@ -176,7 +177,7 @@ const I18N = {
     addFolder: 'Add folder',
     moreOptions: 'More options',
     collapseAllBtn: 'Collapse all',
-    hintDesktop: 'Drag an item onto a folder to move it; tap ··· at the end of a row for more actions.',
+    hintDesktop: 'Drop an item in the middle of a folder to move it inside, or on the top/bottom edge to reorder; tap ··· for more actions.',
     hintTouch: 'Tap ··· at the end of a row to edit, change category via “Move to…”, or delete.',
     sortTitle: 'Sort by',
     cannotLoad: 'Cannot load',
@@ -235,6 +236,7 @@ const I18N = {
     moveTitle: 'Move to',
     moveLabel: 'Target folder',
     moved: 'Moved',
+    reordered: 'Order updated',
     cannotMove: 'Cannot move to that location',
     deleteFolderTitle: 'Delete folder',
     deleteBookmarkTitle: 'Delete bookmark',
@@ -284,6 +286,7 @@ class BookmarkPanel extends HTMLElement {
     this.error = '';
     this.dragId = null;
     this._dropTarget = null;
+    this._dropMode = null;
     this._dialog = null;
     this._hass = null;
     this._toastTimer = null;
@@ -324,6 +327,7 @@ class BookmarkPanel extends HTMLElement {
       }
     }
     this._syncHaTheme();
+    this._syncHaMenuVisibility();
     if (first && value) this._load();
   }
 
@@ -335,7 +339,7 @@ class BookmarkPanel extends HTMLElement {
     return `
 <div class="bm-app">
   <header class="bm-topbar">
-    <button class="bm-icon-btn bm-ha-menu" data-act="ha-menu" title="${this.t('showHideSidebar')}">${ICONS.ha}</button>
+    <button class="bm-icon-btn bm-ha-menu" data-act="ha-menu" title="${this.t('showHideSidebar')}">${ICONS.menu}</button>
     <div class="bm-brand">
       <button class="bm-btn bm-folder-toggle" data-act="toggle-sidebar" title="${this.t('showHideFolders')}">${ICONS.folder}<span class="bm-btn-label">${this.t('folders')}</span></button>
     </div>
@@ -393,6 +397,14 @@ class BookmarkPanel extends HTMLElement {
     this._colorScheme = scheme;
     if (scheme) this.style.colorScheme = scheme;
     else this.style.removeProperty('color-scheme');
+  }
+
+  // 与 HA 自带 app bar 的菜单按钮保持同一显示条件：
+  // home-assistant-main 的 _sidebarNarrow = narrow || dockedSidebar === 'always_hidden'。
+  // narrow 由 HA 注入的类名走 CSS，这里只同步「侧边栏被隐藏」这一种桌面态。
+  _syncHaMenuVisibility() {
+    const hidden = !!(this._hass && this._hass.dockedSidebar === 'always_hidden');
+    this.classList.toggle('ha-sidebar-hidden', hidden);
   }
 
   // 切换 Home Assistant 自带的侧边栏（移动端开抽屉、桌面端切停靠）。
@@ -1163,23 +1175,35 @@ class BookmarkPanel extends HTMLElement {
       if (!this.dragId) return;
       const drop = ev.target.closest('[data-drop="folder"]');
       if (!drop || drop.dataset.id === this.dragId) return;
+      const mode = this._dropModeFor(ev, drop);
       ev.preventDefault();
       ev.dataTransfer.dropEffect = 'move';
-      this._clearDropTarget();
-      drop.classList.add('drop-target');
-      this._dropTarget = drop;
+      if (this._dropTarget !== drop || this._dropMode !== mode) {
+        this._clearDropTarget();
+        drop.classList.add(mode === 'into' ? 'drop-target' : `drop-${mode}`);
+        this._dropTarget = drop;
+        this._dropMode = mode;
+      }
     });
     root.addEventListener('drop', async (ev) => {
       if (!this.dragId) return;
       const drop = ev.target.closest('[data-drop="folder"]');
-      if (!drop) return;
+      if (!drop || drop.dataset.id === this.dragId) return;
       ev.preventDefault();
       const source = this.dragId;
+      const mode = this._dropModeFor(ev, drop);
       this.dragId = null;
       this._clearDropTarget();
-      if (moveNode(this.doc, source, drop.dataset.id)) {
+      const ok = mode === 'into'
+        ? moveNode(this.doc, source, drop.dataset.id)
+        : moveNodeRelative(this.doc, source, drop.dataset.id, mode);
+      if (ok) {
+        // 按名称/日期排序时列表是副本，排序成功后切回自定义顺序才能看到结果
+        if (mode !== 'into') this.sortMode = 'custom';
         await this._commit();
-        this._toast(this.t('moved'));
+        this._toast(this.t(mode === 'into' ? 'moved' : 'reordered'));
+      } else {
+        this._toast(this.t('cannotMove'), true);
       }
     });
     root.addEventListener('dragend', () => {
@@ -1189,9 +1213,23 @@ class BookmarkPanel extends HTMLElement {
     });
   }
 
+  /** 文件夹拖到目标行的上/下缘表示同级重排，中间仍表示移入该文件夹；网址只能移入。 */
+  _dropModeFor(ev, drop) {
+    const source = findNode(this.doc, this.dragId);
+    if (!source || source.node.type !== 'folder') return 'into';
+    const rect = drop.getBoundingClientRect();
+    if (!rect.height) return 'into';
+    const ratio = (ev.clientY - rect.top) / rect.height;
+    if (ratio < 0.28) return 'before';
+    if (ratio > 0.72) return 'after';
+    return 'into';
+  }
+
   _clearDropTarget() {
-    this.shadowRoot.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
+    this.shadowRoot.querySelectorAll('.drop-target, .drop-before, .drop-after')
+      .forEach((el) => el.classList.remove('drop-target', 'drop-before', 'drop-after'));
     this._dropTarget = null;
+    this._dropMode = null;
   }
 
   _onContextMenu(ev) {

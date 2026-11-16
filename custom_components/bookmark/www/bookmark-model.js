@@ -144,6 +144,32 @@ export function moveNode(doc, id, parentId, index = -1) {
   return true;
 }
 
+/**
+ * 把文件夹放到目标文件夹同层的前/后位置（拖动排序）。
+ * targetId 可以是根目录或任意层级的文件夹；position 仅接受 'before' / 'after'。
+ * 跨父级移动同样支持，插入位置按「移除源节点之后」的数组下标计算。
+ */
+export function moveNodeRelative(doc, id, targetId, position) {
+  if (position !== 'before' && position !== 'after') return false;
+  const source = findNode(doc, id);
+  const target = findNode(doc, targetId);
+  if (!source || !target || !id || id === targetId) return false;
+  // 仅文件夹参与排序；网址仍走原来的「拖入文件夹」语义
+  if (source.node.type !== 'folder' || target.node.type !== 'folder') return false;
+  // 禁止把文件夹移到自己的后代旁边（等价于移进自己的后代）
+  if ([...target.ancestors, target.node].some((item) => item.id === id)) return false;
+
+  const targetList = target.parent ? target.parent.children : doc.roots;
+  const targetIndex = target.parent ? target.index : targetList.indexOf(target.node);
+  if (targetIndex < 0) return false;
+  const sourceList = source.parent ? source.parent.children : doc.roots;
+  const sourceIndex = source.parent ? source.index : sourceList.indexOf(source.node);
+  let insertAt = position === 'before' ? targetIndex : targetIndex + 1;
+  if (sourceList === targetList && sourceIndex >= 0 && sourceIndex < insertAt) insertAt -= 1;
+
+  return moveNode(doc, id, target.parent ? target.parent.id : '', insertAt);
+}
+
 export function searchAll(doc, keyword) {
   const query = String(keyword || '').trim().toLowerCase();
   const out = [];

@@ -475,6 +475,12 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-icon-btn:hover { background: var(--bm-hover); }
 .bm-icon-btn svg { width: 18px; height: 18px; }
 
+/* HA 自带 app bar 在侧边栏可见时已提供侧边栏入口，这里只在窄屏（移动端）
+   或 HA 侧边栏被隐藏（dockedSidebar=always_hidden）时才显示汉堡按钮，
+   与 home-assistant-main 的 _sidebarNarrow 判定保持一致。 */
+.bm-ha-menu { display: none; }
+.bm-host.narrow .bm-ha-menu, .bm-host.ha-sidebar-hidden .bm-ha-menu { display: inline-flex; }
+
 /* 顶栏与 HA app-header 融合：控件用中性叠加色，任何 header 底色（浅/深/彩色）都能读 */
 .bm-topbar .bm-btn {
   background: transparent;
@@ -534,6 +540,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-hint-touch { display: none; }
 
 .bm-tree-row {
+  position: relative;
   display: flex; align-items: center; gap: 6px;
   height: 34px; margin: 1px 0; padding-right: 8px;
   border-radius: var(--bm-radius-control); cursor: pointer; user-select: none;
@@ -541,6 +548,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 }
 .bm-tree-row:hover { background: var(--bm-hover); }
 .bm-tree-row.selected { background: var(--bm-selected); color: var(--bm-selected-text); font-weight: 600; }
+.bm-tree-row.dragging { opacity: .45; }
 .bm-tree-row.drop-target { outline: 2px solid var(--bm-accent); outline-offset: -2px; }
 .bm-chevron {
   display: inline-flex; align-items: center; justify-content: center;
@@ -593,6 +601,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
   box-shadow: var(--bm-card-shadow);
 }
 .bm-row {
+  position: relative;
   display: flex; align-items: center; gap: 12px;
   height: 48px; padding: 0 10px;
   border-radius: var(--bm-radius-control); cursor: pointer; user-select: none;
@@ -600,6 +609,13 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-row:hover { background: var(--bm-hover); }
 .bm-row.dragging { opacity: .45; }
 .bm-row.drop-target { outline: 2px solid var(--bm-accent); outline-offset: -2px; }
+.bm-row.drop-before::before, .bm-row.drop-after::before,
+.bm-tree-row.drop-before::before, .bm-tree-row.drop-after::before {
+  content: ''; position: absolute; left: 4px; right: 4px; height: 2px;
+  background: var(--bm-accent); border-radius: 2px; pointer-events: none; z-index: 2;
+}
+.bm-row.drop-before::before, .bm-tree-row.drop-before::before { top: -1px; }
+.bm-row.drop-after::before, .bm-tree-row.drop-after::before { bottom: -1px; }
 .bm-fav {
   width: 22px; height: 22px; flex: none; object-fit: contain;
   border-radius: 4px;
@@ -818,7 +834,6 @@ const ICONS = {
   folder: svg('<path d="M1.5 3.6A1.6 1.6 0 0 1 3.1 2h3l1.4 1.5h6.4A1.6 1.6 0 0 1 15.5 5v7.4a1.6 1.6 0 0 1-1.6 1.6H3.1a1.6 1.6 0 0 1-1.6-1.6V3.6Zm1.3 0v8.8c0 .17.13.3.3.3h10.8a.3.3 0 0 0 .3-.3V5a.3.3 0 0 0-.3-.3H7L5.6 3.2H3.1a.3.3 0 0 0-.3.4Z"/>'),
   chevron: svg('<path d="M5.7 2.8 10.6 8l-4.9 5.2-.95-.9L8.7 8 4.75 3.7z"/>'),
   more: svg('<circle cx="3" cy="8" r="1.25"/><circle cx="8" cy="8" r="1.25"/><circle cx="13" cy="8" r="1.25"/>'),
-  ha: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12.018 2.018a1.7 1.7 0 0 0-1.206.498l-8.296 8.296a1.7 1.7 0 0 0-.498 1.206v7.696c0 .94.766 1.705 1.705 1.705h6.396v-6.397h3.397v6.397h6.396a1.7 1.7 0 0 0 1.705-1.705v-7.696a1.7 1.7 0 0 0-.498-1.206l-8.296-8.296a1.7 1.7 0 0 0-1.187-.5z"/></svg>',
   sort: svg('<path d="M2 3.4h12v1.3H2zm0 3.9h9v1.3H2zm0 3.9h6v1.3H2z"/>'),
   open: svg('<path d="M8.5 2H14v5.5h-1.3V4.35L8.1 9l-.92-.92 4.65-4.65H8.5zM12.5 9.5v3a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1h3V2h-3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3z"/>'),
   copy: svg('<path d="M5.5 1.5h7a1 1 0 0 1 1 1v9h-1.3V2.8H5.5zM3.5 4h7a1 1 0 0 1 1 1v9.5H3.5zM4.8 5.3v8h5.4v-8z"/>'),
@@ -849,7 +864,7 @@ const DEFAULT_FAVICON = 'data:image/svg+xml,' + encodeURIComponent(
 const TEMPLATE = `
 <div class="bm-app">
   <header class="bm-topbar">
-    <button class="bm-icon-btn bm-ha-menu" data-act="ha-menu" title="显示/隐藏 Home Assistant 侧边栏">${ICONS.ha}</button>
+    <button class="bm-icon-btn bm-ha-menu" data-act="ha-menu" title="显示/隐藏 Home Assistant 侧边栏">${ICONS.menu}</button>
     <div class="bm-brand">
       <button class="bm-btn bm-folder-toggle" data-act="toggle-sidebar" title="显示/隐藏文件夹列表">${ICONS.folder}<span class="bm-btn-label">文件夹</span></button>
     </div>
@@ -870,7 +885,7 @@ const TEMPLATE = `
       <div class="bm-sidebar-head"><span>文件夹</span><button class="bm-link" data-act="collapse-all">全部折叠</button></div>
       <div class="bm-tree" id="tree"></div>
       <div class="bm-sidebar-foot">
-        <span class="bm-hint-desktop">拖动条目到文件夹即可移动；点行尾 ··· 查看更多操作。</span>
+        <span class="bm-hint-desktop">拖到文件夹中间可移入，拖到上/下边缘可调整顺序；点行尾 ··· 查看更多操作。</span>
         <span class="bm-hint-touch">点行尾 ··· 可编辑、用「移动到…」调整分类或删除。</span>
       </div>
     </aside>
@@ -1000,7 +1015,11 @@ function walk(callback) {
 
 function findNode(id) {
   let hit = null;
-  walk((node, parent, ancestors) => { if (!hit && node.id === id) hit = { node, parent, ancestors }; });
+  walk((node, parent, ancestors) => {
+    if (hit || node.id !== id) return;
+    const list = parent ? (parent.children || []) : (state.doc.roots || []);
+    hit = { node, parent, ancestors, index: list.indexOf(node) };
+  });
   return hit;
 }
 
@@ -1046,6 +1065,23 @@ function moveNode(id, parentId) {
   if ((target.ancestors || []).some((item) => item.id === id)) return false;
   if (!removeNode(id)) return false;
   target.node.children.push(hit.node);
+  return true;
+}
+
+function moveNodeRelative(id, targetId, position) {
+  if (position !== 'before' && position !== 'after') return false;
+  const source = findNode(id);
+  const target = findNode(targetId);
+  if (!source || !target || !id || id === targetId) return false;
+  if (source.node.type !== 'folder' || target.node.type !== 'folder') return false;
+  if ((target.ancestors || []).concat(target.node).some((item) => item.id === id)) return false;
+  if (source.index < 0 || target.index < 0) return false;
+  const targetList = target.parent ? target.parent.children : state.doc.roots;
+  const sourceList = source.parent ? source.parent.children : state.doc.roots;
+  let insertAt = position === 'before' ? target.index : target.index + 1;
+  if (sourceList === targetList && source.index < insertAt) insertAt -= 1;
+  sourceList.splice(source.index, 1);
+  targetList.splice(insertAt, 0, source.node);
   return true;
 }
 
@@ -1494,6 +1530,7 @@ host.addEventListener('click', (ev) => {
 
   switch (act) {
     case 'toggle-sidebar': $('.bm-app').classList.toggle('sidebar-collapsed'); break;
+    case 'ha-menu': openHaDrawer(); break;
     case 'clear-search': {
       const input = $('.bm-search-input');
       input.value = ''; state.query = ''; render(); input.focus(); break;
@@ -1574,32 +1611,55 @@ host.addEventListener('dragstart', (ev) => {
   ev.dataTransfer.effectAllowed = 'move';
   row.classList.add('dragging');
 });
+function dropModeFor(ev, drop) {
+  const source = findNode(state.dragId);
+  if (!source || source.node.type !== 'folder') return 'into';
+  const rect = drop.getBoundingClientRect();
+  if (!rect.height) return 'into';
+  const ratio = (ev.clientY - rect.top) / rect.height;
+  if (ratio < 0.28) return 'before';
+  if (ratio > 0.72) return 'after';
+  return 'into';
+}
+function clearDropMarks() {
+  host.querySelectorAll('.drop-target, .drop-before, .drop-after')
+    .forEach((el) => el.classList.remove('drop-target', 'drop-before', 'drop-after'));
+}
 host.addEventListener('dragover', (ev) => {
   if (!state.dragId) return;
   const drop = ev.target.closest('[data-drop="folder"]');
   if (!drop || drop.dataset.id === state.dragId) return;
+  const mode = dropModeFor(ev, drop);
   ev.preventDefault();
   ev.dataTransfer.dropEffect = 'move';
-  host.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
-  drop.classList.add('drop-target');
+  clearDropMarks();
+  drop.classList.add(mode === 'into' ? 'drop-target' : 'drop-' + mode);
 });
 host.addEventListener('drop', (ev) => {
   if (!state.dragId) return;
   const drop = ev.target.closest('[data-drop="folder"]');
-  if (!drop) return;
+  if (!drop || drop.dataset.id === state.dragId) return;
   ev.preventDefault();
   const source = state.dragId;
+  const mode = dropModeFor(ev, drop);
   state.dragId = null;
-  host.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
-  if (moveNode(source, drop.dataset.id)) {
-    commit('POST /api/bookmark  ← 拖放移动节点 ' + source);
-    toast('已移动');
+  clearDropMarks();
+  const ok = mode === 'into'
+    ? moveNode(source, drop.dataset.id)
+    : moveNodeRelative(source, drop.dataset.id, mode);
+  if (ok) {
+    if (mode !== 'into') state.sortMode = 'custom';
+    commit('POST /api/bookmark  ← 拖放' + (mode === 'into' ? '移动节点 ' : '重排节点 ') + source);
+    toast(mode === 'into' ? '已移动' : '已调整顺序');
+  } else {
+    toast('无法移动到该位置', true);
   }
   render();
 });
 host.addEventListener('dragend', () => {
   state.dragId = null;
-  host.querySelectorAll('.dragging, .drop-target').forEach((el) => el.classList.remove('dragging', 'drop-target'));
+  host.querySelectorAll('.dragging').forEach((el) => el.classList.remove('dragging'));
+  clearDropMarks();
 });
 
 /* ------------------------------------------------------------ 流程导览 */
@@ -1617,7 +1677,7 @@ const STEPS = [
   {
     title: '浏览文件夹与面包屑',
     desc: '点击左侧树或列表中的文件夹进入，面包屑显示完整路径并可直接跳回上层；三角形展开/折叠，侧栏顶部「全部折叠」一次收起。',
-    points: ['文件夹行显示「文件夹 · N 项」', '更多菜单里还有「展开所有文件夹 / 折叠所有文件夹」', '左上汉堡按钮可收起整个侧栏'],
+    points: ['文件夹行显示「文件夹 · N 项」', '更多菜单里还有「展开所有文件夹 / 折叠所有文件夹」', '左上汉堡按钮只在移动端或 HA 侧边栏隐藏时出现，用于展开 HA 侧边栏'],
     run: () => { resetView(); state.currentId = '4'; state.expanded.add('4'); render(); flash('.bm-crumbs'); },
   },
   {
