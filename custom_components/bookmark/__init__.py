@@ -9,7 +9,7 @@ from homeassistant.components.panel_custom import async_register_panel
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, MODULE_URL, PANEL_ELEMENT, WWW_PATH
+from .const import DOMAIN, MODULE_URL, PANEL_ELEMENT, VERSION, WWW_PATH
 from .http import (
     BookmarkExportView,
     BookmarkFaviconView,
@@ -28,7 +28,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.http.register_view(view)
         data["view_registered"] = True
 
-    if not data.get("static_registered"):
+    # 静态路径同样没有注销 API；路径本身已含版本号，按版本判断是否需要注册，
+    # 避免集成重载时重复注册，也保证升级后新版本路径被注册。
+    if data.get("static_version") != VERSION:
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
@@ -38,7 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 )
             ]
         )
-        data["static_registered"] = True
+        data["static_version"] = VERSION
 
     # 旧版把 require_admin 存在 entry.data 里，却从 options 读取，导致该选项失效
     require_admin = entry.data.get(
