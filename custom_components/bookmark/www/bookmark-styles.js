@@ -213,6 +213,12 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-btn:active, .bm-icon-btn:active { background: var(--bm-hover); }
 .bm-icon-btn svg { width: 18px; height: 18px; }
 
+/* HA 自带 app bar 在侧边栏可见时已提供侧边栏入口，这里只在窄屏（移动端）
+   或 HA 侧边栏被隐藏（dockedSidebar=always_hidden）时才显示汉堡按钮，
+   与 home-assistant-main 的 _sidebarNarrow 判定保持一致。 */
+.bm-ha-menu { display: none; }
+:host(.narrow) .bm-ha-menu, :host(.ha-sidebar-hidden) .bm-ha-menu { display: inline-flex; }
+
 /* 顶栏与 HA app-header 融合：控件用中性叠加色，任何 header 底色（浅/深/彩色）都能读 */
 .bm-topbar .bm-btn {
   background: transparent;
@@ -281,6 +287,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 }
 
 .bm-tree-row {
+  position: relative;
   display: flex; align-items: center; gap: 6px;
   height: 34px; margin: 1px 0; padding-right: 8px;
   border-radius: var(--bm-radius-control); cursor: pointer; user-select: none;
@@ -288,6 +295,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 }
 .bm-tree-row:hover { background: var(--bm-hover); }
 .bm-tree-row.selected { background: var(--bm-selected); color: var(--bm-selected-text); font-weight: 600; }
+.bm-tree-row.dragging { opacity: .45; }
 .bm-tree-row.drop-target { outline: 2px solid var(--bm-accent); outline-offset: -2px; }
 .bm-chevron {
   display: inline-flex; align-items: center; justify-content: center;
@@ -340,6 +348,7 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
   box-shadow: var(--bm-card-shadow);
 }
 .bm-row {
+  position: relative;
   display: flex; align-items: center; gap: 12px;
   height: 48px; padding: 0 10px;
   border-radius: var(--bm-radius-control); cursor: pointer; user-select: none;
@@ -347,6 +356,15 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 .bm-row:hover { background: var(--bm-hover); }
 .bm-row.dragging { opacity: .45; }
 .bm-row.drop-target { outline: 2px solid var(--bm-accent); outline-offset: -2px; }
+
+/* 拖到文件夹行上/下缘时显示插入位置 */
+.bm-row.drop-before::before, .bm-row.drop-after::before,
+.bm-tree-row.drop-before::before, .bm-tree-row.drop-after::before {
+  content: ''; position: absolute; left: 4px; right: 4px; height: 2px;
+  background: var(--bm-accent); border-radius: 2px; pointer-events: none; z-index: 2;
+}
+.bm-row.drop-before::before, .bm-tree-row.drop-before::before { top: -1px; }
+.bm-row.drop-after::before, .bm-tree-row.drop-after::before { bottom: -1px; }
 .bm-fav {
   width: 22px; height: 22px; flex: none; object-fit: contain;
   border-radius: 4px;
