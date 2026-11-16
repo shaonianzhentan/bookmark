@@ -741,7 +741,8 @@ class BookmarkPanel extends HTMLElement {
     const fields = (options.fields || []).map((field) => {
       if (field.type === 'select') {
         const opts = field.options.map((item) => `<option value="${escapeHtml(item.value)}"${item.value === field.value ? ' selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
-        return `<label class="bm-field"><span>${escapeHtml(field.label)}</span><select data-field="${escapeHtml(field.name)}">${opts}</select></label>`;
+        // 触屏上 <label> 包裹 <select> 会把点击再转发一次，iOS 原生选择器弹出后立刻被关掉；改用 div + aria-label
+        return `<div class="bm-field"><span>${escapeHtml(field.label)}</span><select data-field="${escapeHtml(field.name)}" aria-label="${escapeHtml(field.label)}">${opts}</select></div>`;
       }
       if (field.type === 'file') {
         return `<label class="bm-field"><span>${escapeHtml(field.label)}</span><input data-field="${escapeHtml(field.name)}" type="file" accept="${escapeHtml(field.accept || '.html,.htm,.json,text/html,application/json')}" /></label>`;
@@ -760,8 +761,10 @@ class BookmarkPanel extends HTMLElement {
       </div>
     </div></div>`;
     layer.classList.add('show');
+    // 触屏不自动聚焦：键盘一弹起就会把下方的「分类」下拉顶出可视区；桌面仍保留自动聚焦
+    const isTouch = typeof window.matchMedia === 'function' && window.matchMedia('(hover: none)').matches;
     const first = layer.querySelector('[data-field]');
-    if (first) setTimeout(() => { first.focus(); if (first.select) first.select(); }, 0);
+    if (first && !isTouch) setTimeout(() => { first.focus(); if (first.select) first.select(); }, 0);
   }
 
   _closeDialog() {

@@ -430,6 +430,10 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 }
 .bm-dialog {
   width: min(560px, calc(100% - 32px));
+  /* 手机上键盘弹起时内容可能高于可视区，允许对话框内部滚动，避免下方的「分类」下拉被裁掉 */
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 24px;
   background: var(--ha-dialog-surface-background, var(--bm-surface)); color: var(--bm-text);
   border-radius: var(--bm-radius-dialog);

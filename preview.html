@@ -681,6 +681,10 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
 }
 .bm-dialog {
   width: min(560px, calc(100% - 32px));
+  /* 手机上键盘弹起时内容可能高于可视区，允许对话框内部滚动，避免下方的「分类」下拉被裁掉 */
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 24px;
   background: var(--ha-dialog-surface-background, var(--bm-surface)); color: var(--bm-text);
   border-radius: var(--bm-radius-dialog);
@@ -732,6 +736,9 @@ svg { display: block; width: 16px; height: 16px; flex: none; }
   .bm-row-more { opacity: 1; width: 32px; height: 32px; }
   .bm-hint-desktop { display: none; }
   .bm-hint-touch { display: inline; }
+  /* iOS WebView 中输入框字号 < 16px 会在聚焦时放大整页，提到 16px 规避 */
+  .bm-search-input { font-size: 16px; }
+  .bm-field input, .bm-field select { font-size: 16px; }
 }
 .bm-host.narrow .bm-sidebar { position: absolute; top: var(--header-height, 56px); bottom: 0; left: 0; z-index: 10; width: min(272px, 84vw); box-shadow: var(--bm-elevation); }
 .bm-host.narrow .bm-app.sidebar-collapsed .bm-sidebar { width: 0; border-right: 0; box-shadow: none; }
@@ -1282,7 +1289,7 @@ function openDialog(options) {
   const fields = (options.fields || []).map((field) => {
     if (field.type === 'select') {
       const opts = field.options.map((item) => `<option value="${escapeHtml(item.value)}"${item.value === field.value ? ' selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
-      return `<label class="bm-field"><span>${escapeHtml(field.label)}</span><select data-field="${escapeHtml(field.name)}">${opts}</select></label>`;
+      return `<div class="bm-field"><span>${escapeHtml(field.label)}</span><select data-field="${escapeHtml(field.name)}" aria-label="${escapeHtml(field.label)}">${opts}</select></div>`;
     }
     if (field.type === 'file') {
       return `<label class="bm-field"><span>${escapeHtml(field.label)}</span><input data-field="${escapeHtml(field.name)}" type="file" accept="${escapeHtml(field.accept || '.html,.htm,.json,text/html,application/json')}" /></label>`;

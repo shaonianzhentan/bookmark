@@ -7,7 +7,7 @@ API_URL = f"/api/{DOMAIN}"
 API_NAME = f"api:{DOMAIN}"
 
 # 前端模块缓存版本号：取改动当天的日期 YYYY.MM.DD，同日再次改动追加 .N，发版时同步更新 manifest.json
-VERSION = "2026.11.16.1"
+VERSION = "2026.11.16.2"
 
 # 静态资源挂载路径与面板模块。版本号带在路径中，入口与子模块的相对 import
 # 一起换 URL，避免浏览器把旧子模块与新入口错配缓存。
